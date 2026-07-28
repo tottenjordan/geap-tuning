@@ -8,6 +8,7 @@ from geap_tuning.schemas import (
     file_part,
     model_turn,
     preference_example,
+    rlft_example,
     sft_example,
     text_part,
     user_turn,
@@ -66,6 +67,23 @@ def test_preference_example_includes_system_instruction() -> None:
         system_instruction="You are a support agent.",
     )
     assert ex["systemInstruction"]["parts"] == [{"text": "You are a support agent."}]
+
+
+def test_rlft_example_shape() -> None:
+    ex = rlft_example(user_text="What is 2+2?", references={"ground_truth_answer": "4"})
+    assert ex["contents"] == [{"role": "user", "parts": [{"text": "What is 2+2?"}]}]
+    assert ex["references"] == {"ground_truth_answer": "4"}
+    assert "systemInstruction" not in ex
+    assert "completions" not in ex  # RLFT has no scored completions and no gold model turn
+
+
+def test_rlft_example_includes_system_instruction() -> None:
+    ex = rlft_example(
+        user_text="Q",
+        references={"ground_truth_answer": "1"},
+        system_instruction="You are a math tutor.",
+    )
+    assert ex["systemInstruction"]["parts"] == [{"text": "You are a math tutor."}]
 
 
 def test_write_jsonl(tmp_path: Path) -> None:
