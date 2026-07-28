@@ -53,6 +53,10 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
     learning_rate_multiplier: float = 1.0,
     samples_per_prompt: int = 8,
     reward_config: types.SingleReinforcementTuningRewardConfig | None = None,
+    export_last_checkpoint_only: bool = False,
+    evaluation_config: types.EvaluationConfig | None = None,
+    pre_tuned_model_checkpoint_id: str | None = None,
+    checkpoint_interval: int | None = None,
 ) -> Any:  # noqa: ANN401 - SDK returns a dynamically-typed TuningJob
     """Submit an RLFT job and return the created tuning job.
 
@@ -63,6 +67,14 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
     otherwise). NOTE: the RLFT docs call out ``gemini-3.5-flash`` as the supported
     base model — verify availability in your region before running live. Does not
     wait — poll with :func:`geap_tuning.jobs.wait_for_tuning_job`.
+
+    ``export_last_checkpoint_only``, ``evaluation_config`` and
+    ``pre_tuned_model_checkpoint_id`` behave as in :func:`launch_sft_job`; the
+    documented best practice is SFT first, then continuous-tune with RLFT by
+    passing the SFT model's resource name as ``base_model``.
+    ``checkpoint_interval`` (reinforcement-tuning only) sets how many steps
+    elapse between exported checkpoints. See
+    ``docs/notes/checkpoints-and-continuous-tuning.md``.
     """
     config = types.CreateTuningJobConfig(
         method="REINFORCEMENT_TUNING",
@@ -73,6 +85,10 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
         samples_per_prompt=samples_per_prompt,
         reward_config=reward_config or build_reward_config(),
         validation_dataset=types.TuningDataset(gcs_uri=val_uri) if val_uri else None,
+        export_last_checkpoint_only=export_last_checkpoint_only,
+        evaluation_config=evaluation_config,
+        pre_tuned_model_checkpoint_id=pre_tuned_model_checkpoint_id,
+        checkpoint_interval=checkpoint_interval,
     )
     return client.tunings.tune(
         base_model=base_model,

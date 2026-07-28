@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from google.genai import types
 
 from geap_tuning.rlft.tune import (
     build_reward_config,
@@ -52,6 +53,41 @@ def test_launch_rlft_job_without_validation() -> None:
 def test_launch_rlft_job_rejects_unknown_adapter_size() -> None:
     with pytest.raises(KeyError):
         launch_rlft_job(MagicMock(), train_uri="gs://b/t.jsonl", display_name="d", adapter_size=7)
+
+
+def test_launch_rlft_job_exports_intermediate_checkpoints_by_default() -> None:
+    client = MagicMock()
+    launch_rlft_job(client, train_uri="gs://b/t.jsonl", display_name="d")
+    assert client.tunings.tune.call_args.kwargs["config"].export_last_checkpoint_only is False
+
+
+def test_launch_rlft_job_threads_evaluation_config() -> None:
+    client = MagicMock()
+    eval_cfg = types.EvaluationConfig()
+    launch_rlft_job(
+        client, train_uri="gs://b/t.jsonl", display_name="d", evaluation_config=eval_cfg
+    )
+    assert client.tunings.tune.call_args.kwargs["config"].evaluation_config is eval_cfg
+
+
+def test_launch_rlft_job_sets_checkpoint_interval() -> None:
+    client = MagicMock()
+    launch_rlft_job(client, train_uri="gs://b/t.jsonl", display_name="d", checkpoint_interval=20)
+    assert client.tunings.tune.call_args.kwargs["config"].checkpoint_interval == 20
+
+
+def test_launch_rlft_job_continuous_from_pretuned() -> None:
+    client = MagicMock()
+    launch_rlft_job(
+        client,
+        train_uri="gs://b/t.jsonl",
+        display_name="d",
+        base_model="projects/p/locations/l/models/m@1",
+        pre_tuned_model_checkpoint_id="2",
+    )
+    kwargs = client.tunings.tune.call_args.kwargs
+    assert kwargs["base_model"] == "projects/p/locations/l/models/m@1"
+    assert kwargs["config"].pre_tuned_model_checkpoint_id == "2"
 
 
 def test_validate_reward_config_targets_parent() -> None:

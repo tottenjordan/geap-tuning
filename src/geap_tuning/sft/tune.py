@@ -38,6 +38,9 @@ def launch_sft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all keyw
     epochs: int = 2,
     adapter_size: int = 8,
     learning_rate_multiplier: float = 1.0,
+    export_last_checkpoint_only: bool = False,
+    evaluation_config: types.EvaluationConfig | None = None,
+    pre_tuned_model_checkpoint_id: str | None = None,
 ) -> Any:  # noqa: ANN401 - SDK returns a dynamically-typed TuningJob
     """Submit an SFT job and return the created tuning job.
 
@@ -45,6 +48,16 @@ def launch_sft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all keyw
     ``adapter_size`` must be a key of :data:`ADAPTER_MAP` (raises ``KeyError``
     otherwise). This does not wait for completion — poll with
     :func:`geap_tuning.jobs.wait_for_tuning_job`.
+
+    Cross-cutting features (see
+    ``docs/notes/checkpoints-and-continuous-tuning.md``):
+    ``export_last_checkpoint_only=False`` (default) keeps intermediate
+    checkpoints so you can compare/roll back; ``evaluation_config`` attaches
+    auto-eval that runs after each checkpoint (``us-central1`` only). To
+    *continuous-tune* from an existing tuned model, pass its resource name
+    (``projects/.../models/id@ver``) as ``base_model`` — the SDK auto-detects it
+    as a pre-tuned model — and optionally pin a source checkpoint with
+    ``pre_tuned_model_checkpoint_id``.
     """
     config = types.CreateTuningJobConfig(
         tuned_model_display_name=display_name,
@@ -52,6 +65,9 @@ def launch_sft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all keyw
         adapter_size=ADAPTER_MAP[adapter_size],
         learning_rate_multiplier=learning_rate_multiplier,
         validation_dataset=types.TuningDataset(gcs_uri=val_uri) if val_uri else None,
+        export_last_checkpoint_only=export_last_checkpoint_only,
+        evaluation_config=evaluation_config,
+        pre_tuned_model_checkpoint_id=pre_tuned_model_checkpoint_id,
     )
     return client.tunings.tune(
         base_model=base_model,
