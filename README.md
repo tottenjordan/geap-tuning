@@ -101,8 +101,8 @@ job = launch_sft_job(
     train_uri=train_uri,
     val_uri=val_uri,
     display_name="geap-sft-support-intent",
-    evaluation_config=eval_config,     # <- runs after each checkpoint
-    export_last_checkpoint_only=False, # keep checkpoints so each gets evaluated
+    evaluation_config=eval_config,  # <- runs after each checkpoint
+    export_last_checkpoint_only=False,  # keep checkpoints so each gets evaluated
 )
 ```
 
@@ -110,7 +110,11 @@ Under the hood `build_evaluation_config` assembles the SDK types:
 
 ```python
 types.EvaluationConfig(
-    metrics=[types.Metric(name="FLUENCY", prompt_template="Evaluate the fluency of this response: {prediction}")],
+    metrics=[
+        types.Metric(
+            name="FLUENCY", prompt_template="Evaluate the fluency of this response: {prediction}"
+        )
+    ],
     output_config=types.OutputConfig(
         gcs_destination=types.GcsDestination(output_uri_prefix="gs://<bucket>/sft_eval"),
     ),
