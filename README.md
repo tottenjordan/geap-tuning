@@ -86,11 +86,17 @@ client = genai_client(cfg)  # tuning stays regional
 
 with aiplatform.start_run("v1-adapter16"):
     aiplatform.log_params({"base_model": "gemini-3.5-flash", "adapter_size": 16, "epochs": 5})
-    job = launch_rlft_job(client, train_uri=train_uri, val_uri=val_uri,
-                          display_name="geap-rlft-math-v1", base_model="gemini-3.5-flash")
+    job = launch_rlft_job(
+        client,
+        train_uri=train_uri,
+        val_uri=val_uri,
+        display_name="geap-rlft-math-v1",
+        base_model="gemini-3.5-flash",
+    )
     job = wait_for_tuning_job(client, job.name)
-    metrics = run_rlft_eval(test_records,
-                            generate_fn=lambda u: generate(client, tuned_endpoint(job), u))
+    metrics = run_rlft_eval(
+        test_records, generate_fn=lambda u: generate(client, tuned_endpoint(job), u)
+    )
     aiplatform.log_metrics({"held_out_accuracy": metrics["accuracy"], "n": metrics["n"]})
 ```
 
