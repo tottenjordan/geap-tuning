@@ -10,6 +10,12 @@ from geap_tuning.preference.data import (
 )
 
 
+def test_dataset_has_expected_size_and_unique_prompts() -> None:
+    assert len(SUPPORT_REPLIES) == 37
+    prompts = [message for message, _, _ in SUPPORT_REPLIES]
+    assert len(set(prompts)) == len(prompts)  # no duplicate prompts
+
+
 def test_build_records_orders_preferred_first() -> None:
     rec = build_preference_records([("Where is my order?", "Let me check now!", "Idk.")])[0]
     assert rec["contents"][0]["parts"][0]["text"] == "Where is my order?"

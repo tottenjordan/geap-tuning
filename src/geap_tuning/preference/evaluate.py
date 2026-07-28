@@ -18,11 +18,30 @@ if TYPE_CHECKING:
     from geap_tuning.schemas import Record
 
 
-def score_winrate(judgments: Sequence[str], *, win_label: str = "A") -> dict[str, Any]:
-    """Fraction of judgments where the tuned reply (candidate ``win_label``) won."""
+def score_winrate(
+    judgments: Sequence[str],
+    *,
+    win_label: str = "A",
+    lose_label: str = "B",
+) -> dict[str, Any]:
+    """Summarize A/B judgments for the tuned reply (candidate ``win_label``).
+
+    Returns ``win_rate`` plus raw ``wins``/``losses``/``ties``/``n`` counts (a
+    judgment that starts with neither label counts as a tie). The three counts
+    always sum to ``n``.
+    """
     n = len(judgments)
-    wins = sum(1 for j in judgments if j.strip().upper().startswith(win_label))
-    return {"win_rate": wins / n if n else 0.0, "n": n}
+    verdicts = [j.strip().upper() for j in judgments]
+    wins = sum(1 for v in verdicts if v.startswith(win_label.upper()))
+    losses = sum(1 for v in verdicts if v.startswith(lose_label.upper()))
+    ties = n - wins - losses
+    return {
+        "win_rate": wins / n if n else 0.0,
+        "wins": wins,
+        "losses": losses,
+        "ties": ties,
+        "n": n,
+    }
 
 
 def _user_text(record: Record) -> str:

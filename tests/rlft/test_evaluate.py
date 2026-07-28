@@ -4,8 +4,13 @@ from geap_tuning.rlft.evaluate import run_rlft_eval, score_accuracy
 
 
 def test_score_accuracy() -> None:
-    assert score_accuracy([1.0, -1.0, 1.0, 1.0])["accuracy"] == 0.75
-    assert score_accuracy([])["accuracy"] == 0.0
+    metrics = score_accuracy([1.0, -1.0, 1.0, 1.0])
+    assert metrics["accuracy"] == 0.75
+    assert metrics["correct"] == 3
+    assert metrics["n"] == 4
+    empty = score_accuracy([])
+    assert empty["accuracy"] == 0.0
+    assert empty["correct"] == 0
 
 
 def test_run_rlft_eval_uses_injected_generate_fn() -> None:
@@ -23,4 +28,5 @@ def test_run_rlft_eval_uses_injected_generate_fn() -> None:
     replies = iter(["Answer: 4", "Answer: 99"])
     metrics = run_rlft_eval(records, generate_fn=lambda _user: next(replies))
     assert metrics["accuracy"] == 0.5
+    assert metrics["correct"] == 1
     assert metrics["n"] == 2

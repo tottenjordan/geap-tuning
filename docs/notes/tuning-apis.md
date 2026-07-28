@@ -144,6 +144,18 @@ Record shape — `contents` ends on a **user** turn; ground truth lives in
 - For thinking models, disable thinking (`thinking_budget=0`) on the tuned
   endpoint — SFT trains direct ground-truth output, so a trace only adds cost.
 
+## Checkpointing & continuous tuning (cross-cutting, implemented)
+
+Both are sub-features of the three services above, demonstrated by dedicated
+demos (`04_checkpoints`, `05_continuous_tuning`) via shared helpers in `jobs.py`
+and three keyword-only launcher params (`export_last_checkpoint_only`,
+`evaluation_config`, `pre_tuned_model_checkpoint_id`; RLFT also
+`checkpoint_interval`). Continuous tuning needs no base-model plumbing — pass a
+tuned-model resource name as `base_model` and the SDK treats it as pre-tuned.
+Full verified surface + gotchas (auto-eval `us-central1` only, 2025-07-11
+base-model cutoff, Gen AI SDK only) in
+[[checkpoints-and-continuous-tuning]].
+
 ## Pre-GA / drift caveats
 
 - RLFT **is** supported in the installed `google-genai` SDK via

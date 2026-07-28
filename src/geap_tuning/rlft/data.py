@@ -17,7 +17,7 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-from geap_tuning.schemas import Record, rlft_example, write_jsonl
+from geap_tuning.schemas import Record, rlft_example, sft_example, write_jsonl
 
 SYSTEM_INSTRUCTION = (
     "You are a careful math tutor. Think step by step, then end with the final "
@@ -111,6 +111,52 @@ MATH_PROBLEMS: list[tuple[str, str]] = [
         ),
         "54",
     ),
+    ("What is 23 * 6?", "138"),
+    ("What is 30% of 90?", "27"),
+    (
+        "A book has 320 pages. If Lena reads 40 pages a day, how many days to finish it?",
+        "8",
+    ),
+    (
+        "A pizza is cut into 8 slices. If 3 people each eat 2 slices, how many slices remain?",
+        "2",
+    ),
+    ("What is the average of 12, 18, and 30?", "20"),
+    (
+        "A shirt costs $24 and is marked up by 50%. What is the new price in dollars?",
+        "36",
+    ),
+    (
+        "A bus holds 52 passengers. How many passengers can 4 full buses carry?",
+        "208",
+    ),
+    ("What is 7 squared minus 9?", "40"),
+    (
+        "A farmer has 96 eggs and packs them into cartons of 12. How many cartons?",
+        "8",
+    ),
+    (
+        "Water flows at 15 liters per minute. How many liters flow in 12 minutes?",
+        "180",
+    ),
+    (
+        "A movie starts at 7:15 pm and lasts 130 minutes. What time does it end (24-hour, HHMM)?",
+        "2125",
+    ),
+    ("What is 3/4 of 64?", "48"),
+    (
+        "A team scored 3, 5, and 7 points in three games. What was their total score?",
+        "15",
+    ),
+    (
+        "A $1200 laptop is paid in 6 equal monthly installments. How much is each in dollars?",
+        "200",
+    ),
+    (
+        "A rope is 18 meters long and cut into 3 equal pieces. How long is each in meters?",
+        "6",
+    ),
+    ("What is 45 + 67 - 12?", "100"),
 ]
 
 
@@ -120,6 +166,26 @@ def build_rlft_records(problems: list[tuple[str, str]]) -> list[Record]:
         rlft_example(
             user_text=question,
             references={"ground_truth_answer": answer},
+            system_instruction=SYSTEM_INSTRUCTION,
+        )
+        for question, answer in problems
+    ]
+
+
+def build_math_sft_records(problems: list[tuple[str, str]]) -> list[Record]:
+    """Turn ``(question, answer)`` pairs into SFT records for the continuous-tuning seed.
+
+    The SFT→RLFT continuous-tuning demo needs a *stage-1* SFT dataset in the same
+    math domain — but RLFT records carry no gold completion. This reuses
+    :data:`MATH_PROBLEMS` to build supervised records whose ``model`` turn is the
+    ground-truth ``Answer: <n>`` line, teaching the answer *format*; RLFT then
+    refines *correctness* on top. See
+    ``docs/notes/checkpoints-and-continuous-tuning.md``.
+    """
+    return [
+        sft_example(
+            user_text=question,
+            model_text=f"Answer: {answer}",
             system_instruction=SYSTEM_INSTRUCTION,
         )
         for question, answer in problems
@@ -156,5 +222,21 @@ def build_rlft_dataset(out_dir: str | Path) -> dict[str, str]:
     for name, split in (("train", train), ("val", val), ("test", test)):
         path = out_dir / f"{name}.jsonl"
         write_jsonl(build_rlft_records(split), path)
+        paths[name] = str(path)
+    return paths
+
+
+def build_math_sft_dataset(out_dir: str | Path) -> dict[str, str]:
+    """Write the SFT-format math seed (train/val/test) used for stage 1 of SFT→RLFT.
+
+    Same deterministic split as :func:`build_rlft_dataset` but written as SFT
+    ``contents`` records (with a gold ``Answer: <n>`` model turn).
+    """
+    out_dir = Path(out_dir)
+    train, val, test = split_dataset(MATH_PROBLEMS)
+    paths: dict[str, str] = {}
+    for name, split in (("train", train), ("val", val), ("test", test)):
+        path = out_dir / f"{name}.jsonl"
+        write_jsonl(build_math_sft_records(split), path)
         paths[name] = str(path)
     return paths

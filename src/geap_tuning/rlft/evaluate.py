@@ -21,10 +21,10 @@ if TYPE_CHECKING:
 
 
 def score_accuracy(rewards: Sequence[float]) -> dict[str, Any]:
-    """Fraction of generations that earned a positive reward."""
+    """Fraction of generations that earned a positive reward (plus raw counts)."""
     n = len(rewards)
     correct = sum(1 for reward in rewards if reward > 0)
-    return {"accuracy": correct / n if n else 0.0, "n": n}
+    return {"accuracy": correct / n if n else 0.0, "correct": correct, "n": n}
 
 
 def run_rlft_eval(

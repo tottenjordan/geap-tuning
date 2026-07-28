@@ -13,6 +13,8 @@ Facts about Gemini Enterprise Agent Platform (GEAP) model tuning, gathered from 
 
 Modalities: text, image, audio, document (`tune_gemini/{text,image,audio,doc}_tune` docs).
 
+Checkpointing and continuous tuning are **implemented** as cross-cutting demos — see [checkpoints-and-continuous-tuning](checkpoints-and-continuous-tuning.md) for the verified SDK surface (`export_last_checkpoint_only`, per-checkpoint endpoints, default-checkpoint reassignment, and the SFT→RLFT chain).
+
 ## Models supporting SFT (as of note date)
 
 Gemini 3.5 Flash, 3.1 Flash-Lite, 2.5 Pro, 2.5 Flash, 2.5 Flash-Lite. Checkpoints + continuous tuning: same list. Preference tuning: only 2.5 Flash / Flash-Lite.

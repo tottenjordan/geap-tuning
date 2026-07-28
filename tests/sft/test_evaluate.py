@@ -6,6 +6,8 @@ from geap_tuning.sft.evaluate import run_eval, score_classification
 def test_score_classification() -> None:
     m = score_classification(y_true=["billing", "technical"], y_pred=["billing", "billing"])
     assert m["accuracy"] == 0.5
+    assert "macro_f1" in m
+    assert 0.0 <= m["macro_f1"] <= 1.0
     assert "report" in m
 
 

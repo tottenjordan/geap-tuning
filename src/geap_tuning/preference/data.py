@@ -215,6 +215,139 @@ SUPPORT_REPLIES: list[tuple[str, str, str]] = [
         ),
         "You can leave a review online.",
     ),
+    (
+        "My refund still hasn't shown up after a week.",
+        (
+            "I'm sorry it's taking so long — that's understandably frustrating. I've "
+            "confirmed the refund was issued and am escalating a trace with our payment "
+            "processor; I'll email you the reference number today."
+        ),
+        "Refunds take a while. Keep waiting.",
+    ),
+    (
+        "I can't find the invoice for my last payment.",
+        (
+            "No problem — I can get that to you right away. I've re-sent last month's "
+            "invoice to your account email; let me know if you'd like it as a PDF too."
+        ),
+        "Invoices are in your account.",
+    ),
+    (
+        "The mobile app won't sync with the website.",
+        (
+            "Thanks for flagging this — a sync gap is disruptive. Signing out and back "
+            "in on mobile usually forces a fresh sync; if it persists, tell me your app "
+            "version and I'll investigate."
+        ),
+        "Just wait for it to sync eventually.",
+    ),
+    (
+        "How do I upgrade from the free plan?",
+        (
+            "Happy to help you upgrade! Go to Settings > Billing > Change Plan and pick "
+            "the tier you want — the change is instant and prorated. Want a quick rundown "
+            "of what each tier adds?"
+        ),
+        "Click upgrade somewhere in billing.",
+    ),
+    (
+        "My promo credit disappeared from my account.",
+        (
+            "Sorry about that scare — let's sort it out. I can see the credit was applied "
+            "to your last invoice rather than lost; I've attached the breakdown so you can "
+            "see exactly where it went."
+        ),
+        "Credits expire, so it's probably gone.",
+    ),
+    (
+        "The checkout page keeps timing out.",
+        (
+            "Sorry you're hitting timeouts — that's a bad moment for it to happen. Our "
+            "team is looking into elevated latency now; in the meantime a different "
+            "browser or incognito window usually completes the order. I'll watch your cart."
+        ),
+        "Try again later.",
+    ),
+    (
+        "Can I get a copy of my data before I close my account?",
+        (
+            "Absolutely, and thanks for asking before closing. I've started a full export "
+            "and you'll get a secure download link within an hour — take your time, "
+            "nothing is deleted until you confirm."
+        ),
+        "We don't really do data exports.",
+    ),
+    (
+        "The size I ordered doesn't match what arrived.",
+        (
+            "I'm sorry the sizing was off — that's on us. I've placed a replacement in "
+            "the correct size with free expedited shipping and a prepaid return label for "
+            "the wrong one. No rush on the return."
+        ),
+        "Sizes vary. You can reorder.",
+    ),
+    (
+        "I keep getting a 'session expired' error.",
+        (
+            "Sorry for the repeated interruptions — let's fix this. Clearing cookies for "
+            "our site resolves the session error in most cases; if it comes back, send me "
+            "your browser and I'll escalate it as a bug."
+        ),
+        "Log in again each time.",
+    ),
+    (
+        "Do you offer a nonprofit discount?",
+        (
+            "We do — thank you for the work you do! I can apply a nonprofit discount once "
+            "you share proof of status; want me to send the short form to get that started?"
+        ),
+        "Maybe, check the website.",
+    ),
+    (
+        "My teammate can't access the shared project.",
+        (
+            "Sorry for the roadblock — let's get them in. It's usually a role permission; "
+            "if you confirm their email I'll check their access level and grant the shared "
+            "project directly."
+        ),
+        "They need the right permissions.",
+    ),
+    (
+        "I was billed in USD but I'm in the EU.",
+        (
+            "Apologies for the currency mix-up. I've switched your account to EUR and "
+            "refunded the conversion difference on the last charge; future invoices will "
+            "bill in euros."
+        ),
+        "Currency is set automatically.",
+    ),
+    (
+        "The confirmation email never arrived.",
+        (
+            "Sorry it didn't land — that's easy to fix. I've re-sent the confirmation and "
+            "double-checked the address on file; please check spam, and tell me if it's "
+            "still missing so I can whitelist it."
+        ),
+        "Check your spam folder.",
+    ),
+    (
+        "How do I export my report as a PDF?",
+        (
+            "Great question! Open the report, click the Share icon, and choose "
+            "'Download as PDF'. If the option is greyed out, allow pop-ups for our site — "
+            "happy to walk you through it."
+        ),
+        "There's an export option.",
+    ),
+    (
+        "My subscription renewed at a higher price.",
+        (
+            "I understand the surprise — let me explain and make it right. Your intro "
+            "rate ended this cycle; I've applied a loyalty discount to bring it back down "
+            "and credited the difference. Sound good?"
+        ),
+        "Prices go up sometimes.",
+    ),
 ]
 
 

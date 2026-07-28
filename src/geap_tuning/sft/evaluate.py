@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, classification_report, f1_score
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -22,9 +22,14 @@ def score_classification(
     y_true: Sequence[str],
     y_pred: Sequence[str],
 ) -> dict[str, Any]:
-    """Return accuracy and a per-label classification report."""
+    """Return accuracy, macro-averaged F1, and a per-label classification report.
+
+    ``macro_f1`` weights every intent equally regardless of support, so it is a
+    fairer headline metric than accuracy on this roughly-balanced dataset.
+    """
     return {
         "accuracy": accuracy_score(y_true, y_pred),
+        "macro_f1": f1_score(y_true, y_pred, average="macro", zero_division=0),
         "report": classification_report(y_true, y_pred, output_dict=True, zero_division=0),
     }
 

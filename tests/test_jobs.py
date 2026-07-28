@@ -6,14 +6,38 @@ from unittest.mock import MagicMock
 import pytest
 
 from geap_tuning.jobs import (
+    checkpoint_endpoint,
     find_tuning_job_by_display_name,
+    get_default_checkpoint_id,
+    list_checkpoints,
+    set_default_checkpoint,
     tuned_endpoint,
+    tuned_model_name,
     wait_for_tuning_job,
 )
 
 
 def _job(endpoint: str | None = None, model: str | None = None) -> SimpleNamespace:
     return SimpleNamespace(tuned_model=SimpleNamespace(endpoint=endpoint, model=model))
+
+
+def _checkpoint(checkpoint_id: str, *, endpoint: str = "") -> SimpleNamespace:
+    return SimpleNamespace(
+        checkpoint_id=checkpoint_id,
+        epoch=1,
+        step=10,
+        endpoint=endpoint,
+    )
+
+
+def _job_with_checkpoints(
+    checkpoints: list[SimpleNamespace] | None,
+    *,
+    model: str | None = "projects/p/locations/l/models/m@1",
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        tuned_model=SimpleNamespace(endpoint=None, model=model, checkpoints=checkpoints)
+    )
 
 
 def test_tuned_endpoint_prefers_endpoint() -> None:
@@ -67,3 +91,63 @@ def test_wait_raises_on_failed(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(RuntimeError, match="JOB_STATE_FAILED"):
         wait_for_tuning_job(client, "n", poll_interval=0)
+
+
+def test_list_checkpoints_returns_list() -> None:
+    ckpts = [_checkpoint("1"), _checkpoint("2")]
+    assert list_checkpoints(_job_with_checkpoints(ckpts)) == ckpts
+
+
+def test_list_checkpoints_empty_when_none() -> None:
+    assert list_checkpoints(_job_with_checkpoints(None)) == []
+
+
+def test_list_checkpoints_empty_when_attr_absent() -> None:
+    job = SimpleNamespace(tuned_model=SimpleNamespace(endpoint=None, model="m"))
+    assert list_checkpoints(job) == []
+
+
+def test_checkpoint_endpoint_returns_match() -> None:
+    job = _job_with_checkpoints(
+        [_checkpoint("1", endpoint="ep1"), _checkpoint("2", endpoint="ep2")]
+    )
+    assert checkpoint_endpoint(job, "2") == "ep2"
+
+
+def test_checkpoint_endpoint_raises_when_not_found() -> None:
+    job = _job_with_checkpoints([_checkpoint("1", endpoint="ep1")])
+    with pytest.raises(ValueError, match="No checkpoint"):
+        checkpoint_endpoint(job, "9")
+
+
+def test_checkpoint_endpoint_raises_when_endpoint_empty() -> None:
+    job = _job_with_checkpoints([_checkpoint("1", endpoint="")])
+    with pytest.raises(ValueError, match="no endpoint"):
+        checkpoint_endpoint(job, "1")
+
+
+def test_tuned_model_name_returns_resource_name() -> None:
+    job = _job_with_checkpoints(None, model="projects/p/locations/l/models/m@1")
+    assert tuned_model_name(job) == "projects/p/locations/l/models/m@1"
+
+
+def test_tuned_model_name_raises_when_empty() -> None:
+    with pytest.raises(ValueError, match="no tuned model"):
+        tuned_model_name(_job_with_checkpoints(None, model=None))
+
+
+def test_get_default_checkpoint_id() -> None:
+    client = MagicMock()
+    client.models.get.return_value = SimpleNamespace(default_checkpoint_id="2")
+    job = _job_with_checkpoints(None)
+    assert get_default_checkpoint_id(client, job) == "2"
+    assert client.models.get.call_args.kwargs["model"] == "projects/p/locations/l/models/m@1"
+
+
+def test_set_default_checkpoint() -> None:
+    client = MagicMock()
+    job = _job_with_checkpoints(None)
+    set_default_checkpoint(client, job, "1")
+    kwargs = client.models.update.call_args.kwargs
+    assert kwargs["model"] == "projects/p/locations/l/models/m@1"
+    assert kwargs["config"].default_checkpoint_id == "1"

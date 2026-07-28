@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from google.genai import types
 
 from geap_tuning.preference.tune import launch_preference_job
 
@@ -43,3 +44,32 @@ def test_launch_preference_job_rejects_unknown_adapter_size() -> None:
         launch_preference_job(
             MagicMock(), train_uri="gs://b/t.jsonl", display_name="d", adapter_size=7
         )
+
+
+def test_launch_preference_job_exports_intermediate_checkpoints_by_default() -> None:
+    client = MagicMock()
+    launch_preference_job(client, train_uri="gs://b/t.jsonl", display_name="d")
+    assert client.tunings.tune.call_args.kwargs["config"].export_last_checkpoint_only is False
+
+
+def test_launch_preference_job_threads_evaluation_config() -> None:
+    client = MagicMock()
+    eval_cfg = types.EvaluationConfig()
+    launch_preference_job(
+        client, train_uri="gs://b/t.jsonl", display_name="d", evaluation_config=eval_cfg
+    )
+    assert client.tunings.tune.call_args.kwargs["config"].evaluation_config is eval_cfg
+
+
+def test_launch_preference_job_continuous_from_pretuned() -> None:
+    client = MagicMock()
+    launch_preference_job(
+        client,
+        train_uri="gs://b/t.jsonl",
+        display_name="d",
+        base_model="projects/p/locations/l/models/m@1",
+        pre_tuned_model_checkpoint_id="2",
+    )
+    kwargs = client.tunings.tune.call_args.kwargs
+    assert kwargs["base_model"] == "projects/p/locations/l/models/m@1"
+    assert kwargs["config"].pre_tuned_model_checkpoint_id == "2"

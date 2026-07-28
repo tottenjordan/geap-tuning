@@ -7,10 +7,24 @@ def test_score_winrate() -> None:
     metrics = score_winrate(["A", "A", "B", "A"])
     assert metrics["win_rate"] == 0.75
     assert metrics["n"] == 4
+    assert metrics["wins"] == 3
+    assert metrics["losses"] == 1
+    assert metrics["ties"] == 0
+
+
+def test_score_winrate_counts_ties() -> None:
+    metrics = score_winrate(["A", "B", "TIE"])
+    assert metrics["wins"] == 1
+    assert metrics["losses"] == 1
+    assert metrics["ties"] == 1
+    assert metrics["wins"] + metrics["losses"] + metrics["ties"] == metrics["n"]
 
 
 def test_score_winrate_empty() -> None:
-    assert score_winrate([])["win_rate"] == 0.0
+    metrics = score_winrate([])
+    assert metrics["win_rate"] == 0.0
+    assert metrics["n"] == 0
+    assert metrics["wins"] == metrics["losses"] == metrics["ties"] == 0
 
 
 def test_run_preference_eval_uses_injected_fns() -> None:
