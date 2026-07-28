@@ -14,8 +14,11 @@ and a code-execution ``reward_config``), waits for completion, then reports
 held-out answer accuracy scored by the same reward function.
 
 NOTE: the RLFT docs call out ``gemini-3.5-flash`` as the supported base model —
-verify availability in your region before running live; the launcher defaults to
-``gemini-2.5-flash`` for consistency with the other examples.
+verify availability in your region before running live. This example tunes
+``gemini-3.5-flash``, but the client stays **regional** (``cfg.location``): the
+``global`` endpoint that serves Gemini 3.x *inference* does not support tuning, so
+tuning jobs and ``validate_reward`` must run in a region (``us-central1`` /
+``europe-west4``).
 """
 
 from __future__ import annotations
@@ -42,12 +45,13 @@ from geap_tuning.rlft.tune import launch_rlft_job, validate_reward_config
 DISPLAY_NAME = "geap-rlft-math"
 DATA_DIR = Path("datasets/rlft_math")
 GCS_PREFIX = "rlft_math"
+BASE_MODEL = "gemini-3.5-flash"
 
 
 def main() -> None:
     """Run the full RLFT workflow against live GEAP."""
     cfg = load_config()
-    client = genai_client(cfg)
+    client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
     print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
 
     # 1. Build the local dataset splits.
@@ -78,6 +82,7 @@ def main() -> None:
             train_uri=train_uri,
             val_uri=val_uri,
             display_name=DISPLAY_NAME,
+            base_model=BASE_MODEL,
         )
         print(f"Launched tuning job: {job.name}")
     else:
