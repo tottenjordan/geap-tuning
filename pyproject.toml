@@ -48,6 +48,8 @@ ignore = ["D", "COM812", "CPY001", "T201"]
 [tool.ruff.lint.per-file-ignores]
 # S101: asserts are expected in tests; PLR2004: literal comparisons are normal in assertions.
 "tests/**" = ["S101", "PLR2004"]
+# INP001: examples/ is a directory of runnable scripts, not an importable package.
+"examples/**" = ["INP001"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=geap_tuning --cov-report=term-missing"
