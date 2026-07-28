@@ -1,20 +1,25 @@
+<div align="center">
+
 <!-- Banner: drop your image at docs/imgs/banner.png, then uncomment the line below.
-[![GEAP Tuning — working examples of Gemini Enterprise Agent Platform model tuning](docs/imgs/banner.png)](docs/imgs/banner.png)
+<a href="docs/imgs/banner.png"><img src="docs/imgs/banner.png" alt="GEAP Tuning — working examples of Gemini Enterprise Agent Platform model tuning"></a>
 -->
 
-🎛️ GEAP Tuning 🔧
-==================
+<h1>🎛️ GEAP Tuning 🔧</h1>
 
-[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![uv](https://img.shields.io/badge/uv-managed-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
-[![Ruff](https://img.shields.io/badge/lint%20%26%20format-ruff-D7FF64?logo=ruff&logoColor=black)](https://docs.astral.sh/ruff/)
-[![ty](https://img.shields.io/badge/types-ty-261230)](https://github.com/astral-sh/ty)
-[![Google Gen AI SDK](https://img.shields.io/badge/Google%20Gen%20AI%20SDK-4285F4?logo=google&logoColor=white)](https://googleapis.github.io/python-genai/)
-[![Vertex AI](https://img.shields.io/badge/Vertex%20AI-4285F4?logo=googlecloud&logoColor=white)](https://cloud.google.com/vertex-ai)
-[![Gemini 2.5 Flash](https://img.shields.io/badge/Gemini%202.5%20Flash-8E75B2?logo=googlegemini&logoColor=white)](https://deepmind.google/technologies/gemini/)
-[![pytest](https://img.shields.io/badge/tested%20with-pytest-0A9EDC?logo=pytest&logoColor=white)](https://docs.pytest.org/)
+<p>
+<a href="https://www.python.org/"><img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white"></a>
+<a href="https://docs.astral.sh/uv/"><img alt="uv" src="https://img.shields.io/badge/uv-managed-DE5FE9?logo=uv&logoColor=white"></a>
+<a href="https://docs.astral.sh/ruff/"><img alt="Ruff" src="https://img.shields.io/badge/lint%20%26%20format-ruff-D7FF64?logo=ruff&logoColor=black"></a>
+<a href="https://github.com/astral-sh/ty"><img alt="ty" src="https://img.shields.io/badge/types-ty-261230"></a>
+<a href="https://googleapis.github.io/python-genai/"><img alt="Google Gen AI SDK" src="https://img.shields.io/badge/Google%20Gen%20AI%20SDK-4285F4?logo=google&logoColor=white"></a>
+<a href="https://cloud.google.com/vertex-ai"><img alt="Vertex AI" src="https://img.shields.io/badge/Vertex%20AI-4285F4?logo=googlecloud&logoColor=white"></a>
+<a href="https://deepmind.google/technologies/gemini/"><img alt="Gemini 2.5 Flash" src="https://img.shields.io/badge/Gemini%202.5%20Flash-8E75B2?logo=googlegemini&logoColor=white"></a>
+<a href="https://docs.pytest.org/"><img alt="pytest" src="https://img.shields.io/badge/tested%20with-pytest-0A9EDC?logo=pytest&logoColor=white"></a>
+</p>
 
-> Working, runnable examples of **Gemini Enterprise Agent Platform (GEAP)** model tuning services — **supervised fine-tuning (SFT)**, **preference tuning (DPO)**, and **reinforcement learning fine-tuning (RLFT)** — built on the Google Gen AI SDK against the Vertex/Agent Platform backend.
+<p><em>Working, runnable examples of <b>Gemini Enterprise Agent Platform (GEAP)</b> model tuning services —<br><b>supervised fine-tuning (SFT)</b>, <b>preference tuning (DPO)</b>, and <b>reinforcement learning fine-tuning (RLFT)</b> —<br>built on the Google Gen AI SDK against the Vertex/Agent Platform backend.</em></p>
+
+</div>
 
 ## Setup
 
