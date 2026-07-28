@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="docs/imgs/banner.png"><img src="docs/imgs/banner.png" alt="GEAP Tuning — working examples of Gemini Enterprise Agent Platform model tuning" width="100%"></a>
+<a href="docs/imgs/banner.webp"><img src="docs/imgs/banner.webp" alt="GEAP Tuning — working examples of Gemini Enterprise Agent Platform model tuning" width="100%"></a>
 
 <h1>🎛️ GEAP Tuning 🔧</h1>
 
