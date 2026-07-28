@@ -223,3 +223,15 @@ def test_validate_reward_config_targets_parent() -> None:
     kwargs = client.tunings.validate_reward.call_args.kwargs
     assert kwargs["parent"] == "projects/p/locations/l"
     assert kwargs["single_reward_config"].code_execution_reward_scorer is not None
+
+
+def test_launch_rlft_job_threads_evaluate_interval() -> None:
+    client = MagicMock()
+    launch_rlft_job(client, train_uri="gs://b/t.jsonl", display_name="d", evaluate_interval=50)
+    assert client.tunings.tune.call_args.kwargs["config"].evaluate_interval == 50
+
+
+def test_launch_rlft_job_evaluate_interval_defaults_none() -> None:
+    client = MagicMock()
+    launch_rlft_job(client, train_uri="gs://b/t.jsonl", display_name="d")
+    assert client.tunings.tune.call_args.kwargs["config"].evaluate_interval is None

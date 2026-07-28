@@ -40,6 +40,7 @@ def launch_sft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all keyw
     learning_rate_multiplier: float = 1.0,
     export_last_checkpoint_only: bool = False,
     evaluation_config: types.EvaluationConfig | None = None,
+    evaluate_interval: int | None = None,
     pre_tuned_model_checkpoint_id: str | None = None,
 ) -> Any:  # noqa: ANN401 - SDK returns a dynamically-typed TuningJob
     """Submit an SFT job and return the created tuning job.
@@ -53,7 +54,9 @@ def launch_sft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all keyw
     ``docs/notes/checkpoints-and-continuous-tuning.md``):
     ``export_last_checkpoint_only=False`` (default) keeps intermediate
     checkpoints so you can compare/roll back; ``evaluation_config`` attaches
-    auto-eval that runs after each checkpoint (``us-central1`` only). To
+    auto-eval that runs after each checkpoint (``us-central1`` only), and
+    ``evaluate_interval`` sets the step cadence between those eval runs (pairs
+    with ``evaluation_config``; leave ``None`` for the service default). To
     *continuous-tune* from an existing tuned model, pass its resource name
     (``projects/.../models/id@ver``) as ``base_model`` — the SDK auto-detects it
     as a pre-tuned model — and optionally pin a source checkpoint with
@@ -67,6 +70,7 @@ def launch_sft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all keyw
         validation_dataset=types.TuningDataset(gcs_uri=val_uri) if val_uri else None,
         export_last_checkpoint_only=export_last_checkpoint_only,
         evaluation_config=evaluation_config,
+        evaluate_interval=evaluate_interval,
         pre_tuned_model_checkpoint_id=pre_tuned_model_checkpoint_id,
     )
     return client.tunings.tune(

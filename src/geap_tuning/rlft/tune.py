@@ -185,6 +185,7 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
     composite_reward_config: types.CompositeReinforcementTuningRewardConfig | None = None,
     export_last_checkpoint_only: bool = False,
     evaluation_config: types.EvaluationConfig | None = None,
+    evaluate_interval: int | None = None,
     pre_tuned_model_checkpoint_id: str | None = None,
     checkpoint_interval: int | None = None,
 ) -> Any:  # noqa: ANN401 - SDK returns a dynamically-typed TuningJob
@@ -198,8 +199,10 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
     base model — verify availability in your region before running live. Does not
     wait — poll with :func:`geap_tuning.jobs.wait_for_tuning_job`.
 
-    ``export_last_checkpoint_only``, ``evaluation_config`` and
-    ``pre_tuned_model_checkpoint_id`` behave as in :func:`launch_sft_job`; the
+    ``export_last_checkpoint_only``, ``evaluation_config``,
+    ``evaluate_interval`` and ``pre_tuned_model_checkpoint_id`` behave as in
+    :func:`launch_sft_job` (``evaluate_interval`` sets the step cadence for
+    ``evaluation_config`` eval runs); the
     documented best practice is SFT first, then continuous-tune with RLFT by
     passing the SFT model's resource name as ``base_model``.
     ``checkpoint_interval`` (reinforcement-tuning only) sets how many steps
@@ -224,6 +227,7 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
         validation_dataset=types.TuningDataset(gcs_uri=val_uri) if val_uri else None,
         export_last_checkpoint_only=export_last_checkpoint_only,
         evaluation_config=evaluation_config,
+        evaluate_interval=evaluate_interval,
         pre_tuned_model_checkpoint_id=pre_tuned_model_checkpoint_id,
         checkpoint_interval=checkpoint_interval,
     )

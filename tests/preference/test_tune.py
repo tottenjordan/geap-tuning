@@ -73,3 +73,17 @@ def test_launch_preference_job_continuous_from_pretuned() -> None:
     kwargs = client.tunings.tune.call_args.kwargs
     assert kwargs["base_model"] == "projects/p/locations/l/models/m@1"
     assert kwargs["config"].pre_tuned_model_checkpoint_id == "2"
+
+
+def test_launch_preference_job_threads_evaluate_interval() -> None:
+    client = MagicMock()
+    launch_preference_job(
+        client, train_uri="gs://b/t.jsonl", display_name="d", evaluate_interval=50
+    )
+    assert client.tunings.tune.call_args.kwargs["config"].evaluate_interval == 50
+
+
+def test_launch_preference_job_evaluate_interval_defaults_none() -> None:
+    client = MagicMock()
+    launch_preference_job(client, train_uri="gs://b/t.jsonl", display_name="d")
+    assert client.tunings.tune.call_args.kwargs["config"].evaluate_interval is None

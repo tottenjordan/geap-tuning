@@ -36,6 +36,7 @@ def launch_preference_job(  # noqa: PLR0913 - explicit tuning hyperparameters, a
     beta: float = 0.1,
     export_last_checkpoint_only: bool = False,
     evaluation_config: types.EvaluationConfig | None = None,
+    evaluate_interval: int | None = None,
     pre_tuned_model_checkpoint_id: str | None = None,
 ) -> Any:  # noqa: ANN401 - SDK returns a dynamically-typed TuningJob
     """Submit a DPO job and return the created tuning job.
@@ -48,11 +49,11 @@ def launch_preference_job(  # noqa: PLR0913 - explicit tuning hyperparameters, a
     otherwise). This does not wait — poll with
     :func:`geap_tuning.jobs.wait_for_tuning_job`.
 
-    ``export_last_checkpoint_only``, ``evaluation_config`` and
-    ``pre_tuned_model_checkpoint_id`` behave as in :func:`launch_sft_job` — the
-    documented DPO best practice is to SFT first, then continuous-tune from that
-    SFT model by passing its resource name as ``base_model`` (see
-    ``docs/notes/checkpoints-and-continuous-tuning.md``).
+    ``export_last_checkpoint_only``, ``evaluation_config``,
+    ``evaluate_interval`` and ``pre_tuned_model_checkpoint_id`` behave as in
+    :func:`launch_sft_job` — the documented DPO best practice is to SFT first,
+    then continuous-tune from that SFT model by passing its resource name as
+    ``base_model`` (see ``docs/notes/checkpoints-and-continuous-tuning.md``).
     """
     config = types.CreateTuningJobConfig(
         method="PREFERENCE_TUNING",
@@ -64,6 +65,7 @@ def launch_preference_job(  # noqa: PLR0913 - explicit tuning hyperparameters, a
         validation_dataset=types.TuningDataset(gcs_uri=val_uri) if val_uri else None,
         export_last_checkpoint_only=export_last_checkpoint_only,
         evaluation_config=evaluation_config,
+        evaluate_interval=evaluate_interval,
         pre_tuned_model_checkpoint_id=pre_tuned_model_checkpoint_id,
     )
     return client.tunings.tune(
