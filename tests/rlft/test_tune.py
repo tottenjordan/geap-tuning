@@ -171,6 +171,42 @@ def test_launch_rlft_job_continuous_from_pretuned() -> None:
     assert kwargs["config"].pre_tuned_model_checkpoint_id == "2"
 
 
+def test_launch_rlft_job_with_composite_reward() -> None:
+    client = MagicMock()
+    composite = build_composite_reward_config(
+        [(build_reward_config(), 0.8), (build_autorater_reward_config(), 0.2)]
+    )
+    launch_rlft_job(
+        client,
+        train_uri="gs://b/t.jsonl",
+        display_name="d",
+        composite_reward_config=composite,
+    )
+    cfg = client.tunings.tune.call_args.kwargs["config"]
+    assert cfg.composite_reward_config is composite
+    assert cfg.reward_config is None  # single and composite are mutually exclusive
+
+
+def test_validate_reward_config_accepts_composite() -> None:
+    client = MagicMock()
+    composite = build_composite_reward_config([(build_reward_config(), 1.0)])
+    record = {
+        "contents": [{"role": "user", "parts": [{"text": "2+2?"}]}],
+        "references": {"ground_truth_answer": "4"},
+    }
+    validate_reward_config(
+        client,
+        project="p",
+        location="l",
+        sample_answer="Answer: 4",
+        example_record=record,
+        composite_reward_config=composite,
+    )
+    kwargs = client.tunings.validate_reward.call_args.kwargs
+    assert kwargs["composite_reward_config"] is composite
+    assert kwargs["single_reward_config"] is None
+
+
 def test_validate_reward_config_targets_parent() -> None:
     client = MagicMock()
     record = {

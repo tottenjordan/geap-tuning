@@ -182,6 +182,7 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
     learning_rate_multiplier: float = 1.0,
     samples_per_prompt: int = 8,
     reward_config: types.SingleReinforcementTuningRewardConfig | None = None,
+    composite_reward_config: types.CompositeReinforcementTuningRewardConfig | None = None,
     export_last_checkpoint_only: bool = False,
     evaluation_config: types.EvaluationConfig | None = None,
     pre_tuned_model_checkpoint_id: str | None = None,
@@ -204,7 +205,13 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
     ``checkpoint_interval`` (reinforcement-tuning only) sets how many steps
     elapse between exported checkpoints. See
     ``docs/notes/checkpoints-and-continuous-tuning.md``.
+
+    ``reward_config`` and ``composite_reward_config`` are mutually exclusive: pass
+    a :func:`build_composite_reward_config` result as ``composite_reward_config``
+    to score with several weighted scorers, and the single-reward default is
+    skipped. When neither is given, a default code-execution reward is used.
     """
+    single_reward = None if composite_reward_config else (reward_config or build_reward_config())
     config = types.CreateTuningJobConfig(
         method="REINFORCEMENT_TUNING",
         tuned_model_display_name=display_name,
@@ -212,7 +219,8 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
         adapter_size=ADAPTER_MAP[adapter_size],
         learning_rate_multiplier=learning_rate_multiplier,
         samples_per_prompt=samples_per_prompt,
-        reward_config=reward_config or build_reward_config(),
+        reward_config=single_reward,
+        composite_reward_config=composite_reward_config,
         validation_dataset=types.TuningDataset(gcs_uri=val_uri) if val_uri else None,
         export_last_checkpoint_only=export_last_checkpoint_only,
         evaluation_config=evaluation_config,
@@ -234,6 +242,7 @@ def validate_reward_config(  # noqa: PLR0913 - explicit preflight inputs, all ke
     sample_answer: str,
     example_record: dict[str, Any],
     reward_config: types.SingleReinforcementTuningRewardConfig | None = None,
+    composite_reward_config: types.CompositeReinforcementTuningRewardConfig | None = None,
 ) -> Any:  # noqa: ANN401 - SDK returns a dynamically-typed ValidateRewardResponse
     """Preflight the reward on one example via ``tunings.validate_reward``.
 
@@ -241,7 +250,12 @@ def validate_reward_config(  # noqa: PLR0913 - explicit preflight inputs, all ke
     ``error``); a non-null error or ``NaN`` means the reward is broken. Optional
     but recommended before launching — RLFT auto-stops if >80% of reward calls
     fail. ``example_record`` is an RLFT record (``contents`` + ``references``).
+
+    ``reward_config`` and ``composite_reward_config`` are mutually exclusive and
+    mirror :func:`launch_rlft_job`; pass a composite to preflight a weighted
+    reward. When neither is given, the default code-execution reward is scored.
     """
+    single_reward = None if composite_reward_config else (reward_config or build_reward_config())
     return client.tunings.validate_reward(
         parent=f"projects/{project}/locations/{location}",
         sample_response=types.Content(role="model", parts=[types.Part(text=sample_answer)]),
@@ -249,5 +263,6 @@ def validate_reward_config(  # noqa: PLR0913 - explicit preflight inputs, all ke
             contents=example_record["contents"],
             references=example_record["references"],
         ),
-        single_reward_config=reward_config or build_reward_config(),
+        single_reward_config=single_reward,
+        composite_reward_config=composite_reward_config,
     )
