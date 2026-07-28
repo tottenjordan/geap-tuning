@@ -24,19 +24,18 @@ Runtime deps: `google-genai`, `google-cloud-aiplatform` (Vertex/Agent Platform S
 
 ## Tuning surface being demonstrated
 
-GEAP supports these tuning methods (each is a candidate for its own example):
-- **Supervised fine-tuning (SFT)** — the core method; teaches a new skill/behavior from hundreds of labeled JSONL examples. Only tuning option for code models.
-- **Preference tuning** — builds on SFT using human-feedback data (Gemini 2.5 Flash / Flash-Lite).
-- **Tuning checkpoints** — save progress, compare, and pick the best checkpoint.
-- **Continuous tuning** — resume tuning a tuned model/checkpoint with more epochs or data.
+This repo demonstrates GEAP's **three** tuning services (one example subpackage each under `src/geap_tuning/`):
+- **Supervised fine-tuning (SFT)** — the core method; teaches a new skill/behavior from labeled JSONL examples (`contents` records). Implemented (`sft/`).
+- **Preference tuning (DPO)** — builds on SFT using preference pairs; same `client.tunings.tune(...)` call with `method="PREFERENCE_TUNING"` + a `beta` hyperparameter, and `completions`/`score` in each record. Planned (`preference/`).
+- **Reinforcement learning fine-tuning (RLFT)** — trains against a programmable **reward function** over a `references` dataset (no target completion). Pre-GA, REST-first (`v1beta1`); no stable high-level SDK yet. Planned (`rlft/`).
 
-Data modalities: text, image, audio, document. Datasets are JSONL files staged in Cloud Storage.
+Checkpoints and continuous tuning are cross-cutting sub-features of these services, not separate services. Data modalities: text, image, audio, document. Datasets are JSONL files staged in Cloud Storage. Full API shapes are in [docs/notes/tuning-apis.md](docs/notes/tuning-apis.md).
 
 ## Two SDK paths (pick deliberately; do not mix in one example)
 
 Examples generally follow one of two client styles. Keep each example on one path so it reads cleanly:
 
-1. **Google Gen AI SDK** — `from google import genai`; `client.tunings.create/get/list(...)`. Routes to Vertex when `GOOGLE_GENAI_USE_VERTEXAI=true`. This is the newer, preferred surface.
+1. **Google Gen AI SDK** — `from google import genai`; `client.tunings.tune/get/list(...)` (the launch method is `tune`, not `create`). Routes to Vertex when constructed with `vertexai=True` (or `GOOGLE_GENAI_USE_VERTEXAI=true`). This is the newer, preferred surface and the one this repo uses.
 2. **Agent Platform / Vertex SDK for Python** — `import vertexai` + `from vertexai.tuning import sft`; `sft.SupervisedTuningJob(...)`. Older but appears throughout Google's tuning docs.
 
 A tuning job's output is an **endpoint** (`tuning_job.tuned_model.endpoint`); you call `generate_content` against that endpoint, not a model name. For thinking models, disable thinking / set the minimum thinking budget when calling a tuned model — SFT trains the model to mimic ground truth without a thinking trace.

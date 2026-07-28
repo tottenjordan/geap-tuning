@@ -20,6 +20,7 @@ make dev               # uv sync --all-groups
 | Auto-format | `make format` |
 | Run tests | `make test` |
 | Single test | `uv run pytest tests/test_smoke.py::test_main_runs` |
+| Run the SFT example | `uv run python examples/run_sft.py` (requires live GCP + incurs tuning cost) |
 
 ## Conventions
 
