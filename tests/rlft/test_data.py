@@ -10,6 +10,12 @@ from geap_tuning.rlft.data import (
 )
 
 
+def test_dataset_has_expected_size_and_unique_questions() -> None:
+    assert len(MATH_PROBLEMS) == 40
+    questions = [question for question, _ in MATH_PROBLEMS]
+    assert len(set(questions)) == len(questions)  # no duplicate questions
+
+
 def test_build_records_carries_references_and_no_completions() -> None:
     rec = build_rlft_records([("What is 2+2? End with 'Answer: <n>'.", "4")])[0]
     assert rec["references"] == {"ground_truth_answer": "4"}

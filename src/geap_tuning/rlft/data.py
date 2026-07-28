@@ -111,6 +111,52 @@ MATH_PROBLEMS: list[tuple[str, str]] = [
         ),
         "54",
     ),
+    ("What is 23 * 6?", "138"),
+    ("What is 30% of 90?", "27"),
+    (
+        "A book has 320 pages. If Lena reads 40 pages a day, how many days to finish it?",
+        "8",
+    ),
+    (
+        "A pizza is cut into 8 slices. If 3 people each eat 2 slices, how many slices remain?",
+        "2",
+    ),
+    ("What is the average of 12, 18, and 30?", "20"),
+    (
+        "A shirt costs $24 and is marked up by 50%. What is the new price in dollars?",
+        "36",
+    ),
+    (
+        "A bus holds 52 passengers. How many passengers can 4 full buses carry?",
+        "208",
+    ),
+    ("What is 7 squared minus 9?", "40"),
+    (
+        "A farmer has 96 eggs and packs them into cartons of 12. How many cartons?",
+        "8",
+    ),
+    (
+        "Water flows at 15 liters per minute. How many liters flow in 12 minutes?",
+        "180",
+    ),
+    (
+        "A movie starts at 7:15 pm and lasts 130 minutes. What time does it end (24-hour, HHMM)?",
+        "2125",
+    ),
+    ("What is 3/4 of 64?", "48"),
+    (
+        "A team scored 3, 5, and 7 points in three games. What was their total score?",
+        "15",
+    ),
+    (
+        "A $1200 laptop is paid in 6 equal monthly installments. How much is each in dollars?",
+        "200",
+    ),
+    (
+        "A rope is 18 meters long and cut into 3 equal pieces. How long is each in meters?",
+        "6",
+    ),
+    ("What is 45 + 67 - 12?", "100"),
 ]
 
 
