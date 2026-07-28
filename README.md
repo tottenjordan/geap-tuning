@@ -1,8 +1,6 @@
 <div align="center">
 
-<!-- Banner: drop your image at docs/imgs/banner.png, then uncomment the line below.
-<a href="docs/imgs/banner.png"><img src="docs/imgs/banner.png" alt="GEAP Tuning — working examples of Gemini Enterprise Agent Platform model tuning"></a>
--->
+<a href="docs/imgs/banner.svg"><img src="docs/imgs/banner.svg" alt="GEAP Tuning — working examples of Gemini Enterprise Agent Platform model tuning" width="100%"></a>
 
 <h1>🎛️ GEAP Tuning 🔧</h1>
 
