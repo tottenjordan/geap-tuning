@@ -46,6 +46,42 @@ a reward function instead of matching a gold answer.
 Config object: `types.CreateTuningJobConfig(...)`;
 datasets: `types.TuningDataset(gcs_uri=...)`.
 
+## DPO (preference tuning) record + hyperparameters
+
+Implemented in `preference/` (`launch_preference_job`, builders in
+`schemas.preference_example`). Same `client.tunings.tune(...)` as SFT — both
+`method="PREFERENCE_TUNING"` **and** `beta` are fields on
+`types.CreateTuningJobConfig` (verified against the installed SDK, not assumed).
+
+Record shape — `contents` ends on a **user** turn (no gold model turn); the pair
+of scored responses lives in `completions`:
+
+```json
+{
+  "contents": [{"role": "user", "parts": [{"text": "..."}]}],
+  "completions": [
+    {"score": 1, "completion": {"role": "model", "parts": [{"text": "<preferred>"}]}},
+    {"score": 0, "completion": {"role": "model", "parts": [{"text": "<dispreferred>"}]}}
+  ],
+  "systemInstruction": {"parts": [{"text": "..."}]}
+}
+```
+
+- `score` is binary: **1 = preferred, 0 = dispreferred**; exactly one of each.
+  Only the `completions` turns are trained on. `systemInstruction` optional.
+- **Text-only** — DPO does not support multimodal parts.
+- `beta` — recommended **0.01–0.5**; lower = more aggressive updates toward the
+  preferred response, `0` = no learning. All the SFT hyperparameters above
+  (`epoch_count`, `adapter_size`, `learning_rate_multiplier`, `validation_dataset`)
+  also apply.
+- **Supported base models:** Gemini 2.5 Flash / 2.5 Flash-Lite.
+- **Best practice:** SFT on the preferred responses first, then *continuous-tune*
+  from that checkpoint with DPO. This repo's demo tunes the base model directly to
+  stay self-contained.
+- **Eval:** no single gold label → autorater pairwise **win-rate** (tuned reply
+  vs. the dispreferred reference in a blind A/B judgment); see
+  `preference/evaluate.py`.
+
 ## Job lifecycle → endpoint
 
 - States: `JOB_STATE_{PENDING,RUNNING,SUCCEEDED,FAILED,CANCELLED}` (constants in
