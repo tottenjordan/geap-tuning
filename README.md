@@ -41,6 +41,8 @@ make dev               # uv sync --all-groups
 | Run the RLFT example | `uv run python examples/run_rlft.py` (requires live GCP + incurs tuning cost) |
 | Run the checkpointing demo | `uv run python examples/run_checkpoints.py` (requires live GCP + incurs tuning cost) |
 | Run the continuous-tuning demo | `uv run python examples/run_continuous_tuning.py` (requires live GCP + incurs tuning cost) |
+| Run the RLFT reward-types tour | `uv run python examples/run_rlft_reward_types.py` (requires live GCP + incurs tuning cost) |
+| Run the advanced-evaluation demo | `uv run python examples/run_advanced_eval.py` (requires live GCP + incurs tuning cost) |
 
 ## Checkpointing & continuous tuning
 
@@ -63,6 +65,29 @@ params (`export_last_checkpoint_only`, `evaluation_config`,
 See [`docs/notes/checkpoints-and-continuous-tuning.md`](docs/notes/checkpoints-and-continuous-tuning.md)
 for the verified SDK surface and gotchas (Gen AI SDK only; auto-eval
 `us-central1` only; base-model 2025-07-11 cutoff; tuning stays regional).
+
+## RLFT reward types
+
+RLFT scores each generation with a **reward function** over the record's
+`references` — the scorer shape decides *how*. All four SDK scorers have builders
+in [`rlft/tune.py`](src/geap_tuning/rlft/tune.py), toured by
+`examples/run_rlft_reward_types.py` +
+[`notebooks/06_rlft_reward_types.ipynb`](notebooks/06_rlft_reward_types.ipynb):
+
+- **code-execution** (`build_reward_config`) — verifiable correctness; ships
+  tested Python via `inspect.getsource` (the default reward).
+- **string-match** (`build_string_match_reward_config`) — cheap, declarative
+  format/keyword reward; no gold answer, no sandbox.
+- **autorater** (`build_autorater_reward_config`) — an LLM judge scores subjective
+  quality.
+- **cloud-run** (`build_cloud_run_reward_config`) — external service; **documented
+  builder only** (needs a deployed endpoint).
+
+`build_composite_reward_config([(cfg, weight), ...])` combines several into a
+weighted reward (e.g. code-exec 0.8 + autorater 0.2); pass it to `launch_rlft_job`
+/ `validate_reward_config` as `composite_reward_config=` (mutually exclusive with
+the single `reward_config`). Preflight any reward with `validate_reward_config`
+before spending on a job.
 
 ## Evaluation
 
@@ -121,17 +146,28 @@ types.EvaluationConfig(
 )
 ```
 
-- **Metrics** — each `types.Metric` is either an LLM-as-judge metric (supply a
-  `prompt_template`, optional `judge_model_system_instruction`) or a computation
-  metric (`custom_function`). Pass your own list to `build_evaluation_config(...,
-  metrics=[...])`; the default is a single pointwise fluency metric as a starting
-  point. **Verify metric names/templates against the live eval catalog before a
-  real run** — the catalog evolves, and the SDK lowercases `Metric.name`.
-- **Autorater** — `EvaluationConfig.autorater_config` (`types.AutoraterConfig`)
-  tunes the judge: `autorater_model`, `sampling_count`, `flip_enabled` (mitigates
-  position bias), `generation_config`.
-- **Cadence** — the launcher evaluates each checkpoint; `CreateTuningJobConfig`
-  also exposes `evaluate_interval` for step-based cadence if you thread it through.
+- **Metrics** — mix three kinds, each with a builder in
+  [`autoeval.py`](src/geap_tuning/autoeval.py) (see the comprehensive
+  [`run_advanced_eval.py`](examples/run_advanced_eval.py) /
+  [`07_advanced_eval`](notebooks/07_advanced_eval.ipynb)):
+  - `llm_judge_metric(name, prompt_template, judge_model_system_instruction=)` —
+    LLM-as-judge (`types.Metric`). **SDK lowercases `name`.**
+  - `computation_metric(metric_type)` — deterministic `EXACT_MATCH`/`BLEU`/`ROUGE`
+    (`types.UnifiedMetric`; no `name` field — the spec identifies it).
+  - `predefined_metric(metric_spec_name)` — a managed catalog metric by name
+    (e.g. `text_quality_v1`). **Verify names against the live catalog first.**
+
+  Pass your own list to `build_evaluation_config(..., metrics=[...])`; the default
+  is a single pointwise fluency metric as a starting point.
+- **Autorater** — `build_autorater_config(sampling_count=, flip_enabled=,
+  autorater_model=)` → `EvaluationConfig.autorater_config` tunes the shared judge
+  (`flip_enabled` mitigates pairwise position bias).
+- **Inference config** — `build_evaluation_config(..., inference_generation_config=
+  types.GenerationConfig(temperature=0.0))` controls how the *tuned model*
+  generates the responses being scored (deterministic → comparable across
+  checkpoints).
+- **Cadence** — the launcher evaluates each checkpoint; `evaluate_interval` (int)
+  is now threaded through **all three launchers** for step-based cadence.
 - **Results** — land under `output_uri_prefix` in Cloud Storage; view them there
   or in **Agent Platform Studio → Tune and Distill → _your tuned model_**.
 
