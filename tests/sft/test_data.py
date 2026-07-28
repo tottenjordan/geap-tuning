@@ -1,5 +1,6 @@
 """Tests for the SFT support-intent dataset builder."""
 
+from collections import Counter
 from pathlib import Path
 
 from geap_tuning.sft.data import (
@@ -14,6 +15,13 @@ from geap_tuning.sft.data import (
 
 def test_all_tickets_use_known_labels() -> None:
     assert {label for _, label in SUPPORT_TICKETS} <= set(LABELS)
+
+
+def test_dataset_is_balanced_across_labels() -> None:
+    counts = Counter(label for _, label in SUPPORT_TICKETS)
+    assert len(SUPPORT_TICKETS) == 65
+    assert set(counts) == set(LABELS)
+    assert len(set(counts.values())) == 1  # every intent equally represented
 
 
 def test_build_records_uses_prompt_and_label() -> None:
