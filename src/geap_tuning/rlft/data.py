@@ -17,7 +17,7 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-from geap_tuning.schemas import Record, rlft_example, write_jsonl
+from geap_tuning.schemas import Record, rlft_example, sft_example, write_jsonl
 
 SYSTEM_INSTRUCTION = (
     "You are a careful math tutor. Think step by step, then end with the final "
@@ -172,6 +172,26 @@ def build_rlft_records(problems: list[tuple[str, str]]) -> list[Record]:
     ]
 
 
+def build_math_sft_records(problems: list[tuple[str, str]]) -> list[Record]:
+    """Turn ``(question, answer)`` pairs into SFT records for the continuous-tuning seed.
+
+    The SFT→RLFT continuous-tuning demo needs a *stage-1* SFT dataset in the same
+    math domain — but RLFT records carry no gold completion. This reuses
+    :data:`MATH_PROBLEMS` to build supervised records whose ``model`` turn is the
+    ground-truth ``Answer: <n>`` line, teaching the answer *format*; RLFT then
+    refines *correctness* on top. See
+    ``docs/notes/checkpoints-and-continuous-tuning.md``.
+    """
+    return [
+        sft_example(
+            user_text=question,
+            model_text=f"Answer: {answer}",
+            system_instruction=SYSTEM_INSTRUCTION,
+        )
+        for question, answer in problems
+    ]
+
+
 def split_dataset(
     problems: list[tuple[str, str]],
     *,
@@ -202,5 +222,21 @@ def build_rlft_dataset(out_dir: str | Path) -> dict[str, str]:
     for name, split in (("train", train), ("val", val), ("test", test)):
         path = out_dir / f"{name}.jsonl"
         write_jsonl(build_rlft_records(split), path)
+        paths[name] = str(path)
+    return paths
+
+
+def build_math_sft_dataset(out_dir: str | Path) -> dict[str, str]:
+    """Write the SFT-format math seed (train/val/test) used for stage 1 of SFT→RLFT.
+
+    Same deterministic split as :func:`build_rlft_dataset` but written as SFT
+    ``contents`` records (with a gold ``Answer: <n>`` model turn).
+    """
+    out_dir = Path(out_dir)
+    train, val, test = split_dataset(MATH_PROBLEMS)
+    paths: dict[str, str] = {}
+    for name, split in (("train", train), ("val", val), ("test", test)):
+        path = out_dir / f"{name}.jsonl"
+        write_jsonl(build_math_sft_records(split), path)
         paths[name] = str(path)
     return paths

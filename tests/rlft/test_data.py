@@ -4,6 +4,8 @@ from pathlib import Path
 
 from geap_tuning.rlft.data import (
     MATH_PROBLEMS,
+    build_math_sft_dataset,
+    build_math_sft_records,
     build_rlft_dataset,
     build_rlft_records,
     split_dataset,
@@ -39,3 +41,19 @@ def test_build_rlft_dataset_writes_three_splits(tmp_path: Path) -> None:
     assert set(paths) == {"train", "val", "test"}
     for path in paths.values():
         assert Path(path).exists()
+
+
+def test_math_sft_records_have_gold_answer_and_no_references() -> None:
+    rec = build_math_sft_records([("What is 2+2?", "4")])[0]
+    assert "references" not in rec
+    assert rec["contents"][0]["role"] == "user"
+    assert rec["contents"][1]["role"] == "model"
+    assert rec["contents"][1]["parts"][0]["text"] == "Answer: 4"
+
+
+def test_build_math_sft_dataset_writes_three_splits(tmp_path: Path) -> None:
+    paths = build_math_sft_dataset(tmp_path)
+    assert set(paths) == {"train", "val", "test"}
+    for path in paths.values():
+        assert Path(path).exists()
+        assert Path(path).read_text(encoding="utf-8").strip()
