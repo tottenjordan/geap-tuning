@@ -64,6 +64,89 @@ See [`docs/notes/checkpoints-and-continuous-tuning.md`](docs/notes/checkpoints-a
 for the verified SDK surface and gotchas (Gen AI SDK only; auto-eval
 `us-central1` only; base-model 2025-07-11 cutoff; tuning stays regional).
 
+## Evaluation
+
+GEAP exposes a managed **Gen AI Evaluation service**, and this repo pairs it with
+its own **offline** scoring. They answer different questions — use both:
+
+| | GEAP Evaluation service (managed) | Offline `evaluate.py` (this repo) |
+|---|---|---|
+| Runs where | Inside the tuning job, on GEAP | Locally, against the tuned endpoint |
+| When | After each checkpoint, automatically | Whenever you call it, post-tuning |
+| Metrics | LLM-as-judge / computation metrics from the eval catalog | Task-specific: SFT accuracy, DPO win-rate, RLFT reward accuracy |
+| Output | JSONL/summary written to Cloud Storage | Python dict returned in-process |
+| Availability | Preview, **`us-central1` only** | Anywhere |
+
+### Using the managed Evaluation service
+
+The service is reached **through the tuning call** — there is no standalone
+`client.evals` surface in the Gen AI SDK (2.14.0). You attach an
+`EvaluationConfig` to the job; GEAP then evaluates each exported checkpoint and
+writes the results to GCS. Build the config with
+[`geap_tuning.autoeval.build_evaluation_config`](src/geap_tuning/autoeval.py) and
+pass it to any launcher's `evaluation_config` parameter:
+
+```python
+from geap_tuning.autoeval import build_evaluation_config
+from geap_tuning.config import genai_client, load_config
+from geap_tuning.sft.tune import launch_sft_job
+
+cfg = load_config()  # location must be us-central1 for auto-eval
+client = genai_client(cfg)
+
+eval_config = build_evaluation_config(cfg.bucket, prefix="sft_eval")
+
+job = launch_sft_job(
+    client,
+    train_uri=train_uri,
+    val_uri=val_uri,
+    display_name="geap-sft-support-intent",
+    evaluation_config=eval_config,     # <- runs after each checkpoint
+    export_last_checkpoint_only=False, # keep checkpoints so each gets evaluated
+)
+```
+
+Under the hood `build_evaluation_config` assembles the SDK types:
+
+```python
+types.EvaluationConfig(
+    metrics=[types.Metric(name="FLUENCY", prompt_template="Evaluate the fluency of this response: {prediction}")],
+    output_config=types.OutputConfig(
+        gcs_destination=types.GcsDestination(output_uri_prefix="gs://<bucket>/sft_eval"),
+    ),
+)
+```
+
+- **Metrics** — each `types.Metric` is either an LLM-as-judge metric (supply a
+  `prompt_template`, optional `judge_model_system_instruction`) or a computation
+  metric (`custom_function`). Pass your own list to `build_evaluation_config(...,
+  metrics=[...])`; the default is a single pointwise fluency metric as a starting
+  point. **Verify metric names/templates against the live eval catalog before a
+  real run** — the catalog evolves, and the SDK lowercases `Metric.name`.
+- **Autorater** — `EvaluationConfig.autorater_config` (`types.AutoraterConfig`)
+  tunes the judge: `autorater_model`, `sampling_count`, `flip_enabled` (mitigates
+  position bias), `generation_config`.
+- **Cadence** — the launcher evaluates each checkpoint; `CreateTuningJobConfig`
+  also exposes `evaluate_interval` for step-based cadence if you thread it through.
+- **Results** — land under `output_uri_prefix` in Cloud Storage; view them there
+  or in **Agent Platform Studio → Tune and Distill → _your tuned model_**.
+
+> Auto-eval is Preview and available in **`us-central1` only**, so keep
+> `GCP_REGION`/`GOOGLE_CLOUD_LOCATION` on `us-central1` when using it.
+
+### Offline evaluation (complementary)
+
+Each service ships a small, unit-tested offline scorer that runs against the
+tuned endpoint and returns a metrics dict — used by the `examples/run_*.py`
+drivers and notebooks:
+
+- SFT — [`sft/evaluate.py`](src/geap_tuning/sft/evaluate.py) `run_eval` →
+  `accuracy`, `macro_f1`, per-label `report`.
+- DPO — [`preference/evaluate.py`](src/geap_tuning/preference/evaluate.py)
+  `score_winrate` → `win_rate` + `wins`/`losses`/`ties`/`n`.
+- RLFT — [`rlft/evaluate.py`](src/geap_tuning/rlft/evaluate.py) `run_rlft_eval`
+  → `accuracy` + `correct`/`n`, reusing the training reward.
+
 ## Experiment tracking
 
 GEAP tracks tuning experiments at two levels — one you get for free, one you opt into.
