@@ -8,5 +8,6 @@ Curated links to durable notes for this repo. Keep this file **under 200 lines**
 - [Tuning APIs](tuning-apis.md) — per-service call shapes, JSONL schemas (SFT/DPO/RLFT), hyperparameters, Pre-GA caveats.
 - [Environment & config](environment.md) — `.env` var groups, redundant aliases, region/bucket gotchas, auth.
 - [Toolchain & standards](toolchain.md) — uv/ruff/ty/pytest setup, ruff `ALL` ignores, non-obvious config decisions.
+- [Experiment tracking](experiment-tracking.md) — automatic tuning-metric curves vs. opt-in Vertex AI Experiments; the `val_uri`→`/eval_*` link.
 
 <!-- Add one line per new note: - [Title](file.md) — hook -->

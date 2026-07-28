@@ -61,6 +61,57 @@ def sft_example(
     return record
 
 
+def completion_turn(score: int, text: str) -> dict[str, Any]:
+    """Return a scored DPO completion (``score``: 1 = preferred, 0 = dispreferred)."""
+    return {"score": score, "completion": model_turn(text_part(text))}
+
+
+def preference_example(
+    *,
+    user_text: str,
+    preferred_text: str,
+    dispreferred_text: str,
+    system_instruction: str | None = None,
+) -> Record:
+    """Build a single-turn preference (DPO) record.
+
+    ``contents`` holds only the user turn — DPO trains on the ``completions``, not
+    a gold model turn. The pair is ordered preferred (score 1) then dispreferred
+    (score 0). Text-only: DPO does not support multimodal parts.
+    """
+    record: Record = {
+        "contents": [user_turn(text_part(user_text))],
+        "completions": [
+            completion_turn(1, preferred_text),
+            completion_turn(0, dispreferred_text),
+        ],
+    }
+    if system_instruction is not None:
+        record["systemInstruction"] = {"parts": [text_part(system_instruction)]}
+    return record
+
+
+def rlft_example(
+    *,
+    user_text: str,
+    references: dict[str, str],
+    system_instruction: str | None = None,
+) -> Record:
+    """Build a single-turn RLFT (reinforcement tuning) record.
+
+    ``contents`` holds only the user turn — RLFT has no gold completion; the model
+    is scored by a reward function over ``references`` (a string→string dict of
+    ground-truth metadata the reward reads). Text-only. ``systemInstruction`` optional.
+    """
+    record: Record = {
+        "contents": [user_turn(text_part(user_text))],
+        "references": references,
+    }
+    if system_instruction is not None:
+        record["systemInstruction"] = {"parts": [text_part(system_instruction)]}
+    return record
+
+
 def write_jsonl(records: list[Record], path: str | Path) -> int:
     """Write ``records`` as one JSON object per line; return the count written."""
     path = Path(path)

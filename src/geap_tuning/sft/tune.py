@@ -4,7 +4,8 @@ SFT trains the base model to reproduce the ``model`` turn of each ``contents``
 record. The job is submitted with ``client.tunings.tune(...)`` — the same entry
 point every ``tunings``-based GEAP service uses. Preference tuning (DPO) later
 reuses this exact call shape, adding ``method="PREFERENCE_TUNING"`` and a
-``beta`` hyperparameter to the config; RLFT takes a separate REST path.
+``beta`` hyperparameter to the config; RLFT adds ``method="REINFORCEMENT_TUNING"``
+and a ``reward_config`` on the same call (see ``rlft/tune.py``).
 """
 
 from __future__ import annotations

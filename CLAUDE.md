@@ -26,8 +26,8 @@ Runtime deps: `google-genai`, `google-cloud-aiplatform` (Vertex/Agent Platform S
 
 This repo demonstrates GEAP's **three** tuning services (one example subpackage each under `src/geap_tuning/`):
 - **Supervised fine-tuning (SFT)** — the core method; teaches a new skill/behavior from labeled JSONL examples (`contents` records). Implemented (`sft/`).
-- **Preference tuning (DPO)** — builds on SFT using preference pairs; same `client.tunings.tune(...)` call with `method="PREFERENCE_TUNING"` + a `beta` hyperparameter, and `completions`/`score` in each record. Planned (`preference/`).
-- **Reinforcement learning fine-tuning (RLFT)** — trains against a programmable **reward function** over a `references` dataset (no target completion). Pre-GA, REST-first (`v1beta1`); no stable high-level SDK yet. Planned (`rlft/`).
+- **Preference tuning (DPO)** — builds on SFT using preference pairs; same `client.tunings.tune(...)` call with `method="PREFERENCE_TUNING"` + a `beta` hyperparameter, and `completions`/`score` in each record. Implemented (`preference/`).
+- **Reinforcement learning fine-tuning (RLFT)** — trains against a programmable **reward function** over a `references` dataset (no target completion). The installed Gen AI SDK supports it on the *same* `client.tunings.tune(...)` call with `method="REINFORCEMENT_TUNING"` + a `reward_config` (still Pre-GA/`v1beta1`, so verify symbols before running). Implemented (`rlft/`).
 
 Checkpoints and continuous tuning are cross-cutting sub-features of these services, not separate services. Data modalities: text, image, audio, document. Datasets are JSONL files staged in Cloud Storage. Full API shapes are in [docs/notes/tuning-apis.md](docs/notes/tuning-apis.md).
 
