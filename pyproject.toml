@@ -1,0 +1,53 @@
+[project]
+name = "geap-tuning"
+version = "0.1.0"
+description = "Working examples of Gemini Enterprise Agent Platform (GEAP) model tuning services"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "google-cloud-aiplatform>=1.162.0",
+    "google-genai>=2.14.0",
+    "python-dotenv>=1.2.2",
+]
+
+[project.scripts]
+geap-tuning = "geap_tuning:main"
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [{ include-group = "lint" }, { include-group = "test" }]
+lint = [
+    "ruff",
+    "ty",
+]
+test = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+# D: docstring rules, COM812: formatter-managed commas,
+# CPY001: copyright headers, T201: print() is fine in runnable examples.
+ignore = ["D", "COM812", "CPY001", "T201"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # asserts are expected in tests
+
+[tool.pytest.ini_options]
+addopts = "--cov=geap_tuning --cov-report=term-missing"
+testpaths = ["tests"]
+
+[tool.ty.terminal]
+error-on-warning = true
+
+[tool.ty.environment]
+python-version = "3.12"
