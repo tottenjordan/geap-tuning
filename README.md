@@ -39,6 +39,30 @@ make dev               # uv sync --all-groups
 | Run the SFT example | `uv run python examples/run_sft.py` (requires live GCP + incurs tuning cost) |
 | Run the DPO example | `uv run python examples/run_preference.py` (requires live GCP + incurs tuning cost) |
 | Run the RLFT example | `uv run python examples/run_rlft.py` (requires live GCP + incurs tuning cost) |
+| Run the checkpointing demo | `uv run python examples/run_checkpoints.py` (requires live GCP + incurs tuning cost) |
+| Run the continuous-tuning demo | `uv run python examples/run_continuous_tuning.py` (requires live GCP + incurs tuning cost) |
+
+## Checkpointing & continuous tuning
+
+Two cross-cutting sub-features layer on top of all three services (not separate
+services). They're demonstrated by dedicated demos — `examples/run_checkpoints.py`
++ [`notebooks/04_checkpoints.ipynb`](notebooks/04_checkpoints.ipynb) and
+`examples/run_continuous_tuning.py` +
+[`notebooks/05_continuous_tuning.ipynb`](notebooks/05_continuous_tuning.ipynb) —
+built on shared helpers in `geap_tuning.jobs` plus three keyword-only launcher
+params (`export_last_checkpoint_only`, `evaluation_config`,
+`pre_tuned_model_checkpoint_id`).
+
+- **Checkpointing** — tune with `export_last_checkpoint_only=False` (the default)
+  to keep one checkpoint per epoch, list them, run per-checkpoint inference, and
+  reassign the model's default checkpoint.
+- **Continuous tuning** — pass a prior tuned model's resource name as
+  `base_model` to continue-tune from it; the demo chains **SFT → RLFT** on the
+  same math domain and reports the accuracy lift.
+
+See [`docs/notes/checkpoints-and-continuous-tuning.md`](docs/notes/checkpoints-and-continuous-tuning.md)
+for the verified SDK surface and gotchas (Gen AI SDK only; auto-eval
+`us-central1` only; base-model 2025-07-11 cutoff; tuning stays regional).
 
 ## Experiment tracking
 
