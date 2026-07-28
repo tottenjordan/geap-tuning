@@ -38,6 +38,7 @@ make dev               # uv sync --all-groups
 | Provision GCP resources | `./scripts/bootstrap_gcp.sh` (enables APIs + creates the region-matched bucket; idempotent, needs `gcloud auth login` first) |
 | Run the SFT example | `uv run python examples/run_sft.py` (requires live GCP + incurs tuning cost) |
 | Run the DPO example | `uv run python examples/run_preference.py` (requires live GCP + incurs tuning cost) |
+| Run the RLFT example | `uv run python examples/run_rlft.py` (requires live GCP + incurs tuning cost) |
 
 ## Conventions
 

@@ -10,7 +10,7 @@ See [[environment]] for config/auth and [[toolchain]] for tooling.
 |---|---|---|---|---|
 | **SFT** | `client.tunings.tune(base_model, training_dataset, config)` | none (just `contents`) | `epoch_count`, `adapter_size`, `learning_rate_multiplier` | GA, Gen AI SDK |
 | **Preference (DPO)** | same `tunings.tune(...)` + `method="PREFERENCE_TUNING"` | `completions` list with `score` (0/1) | above + `beta` | GA, Gen AI SDK |
-| **RLFT** | REST `v1beta1` tuningJobs (no stable high-level SDK) | `references` (no target completion) | reward function + reward config | Pre-GA, REST-first |
+| **RLFT** | same `tunings.tune(...)` + `method="REINFORCEMENT_TUNING"` | `references` (no target completion) | `reward_config` + `samples_per_prompt` | Pre-GA, Gen AI SDK |
 
 The launch method is **`tune`**, not `create`. Construct the Vertex-backed
 client with `genai.Client(vertexai=True, project=..., location=...)`.
@@ -31,9 +31,10 @@ Base record (SFT) — one user turn + the ground-truth model turn:
 `schemas.file_part`).
 
 **DPO** adds a `completions` array of candidate responses, each with a binary
-`score` (1 = preferred, 0 = not). **RLFT** replaces the target model turn with a
-`references` field (context the model conditions on) and scores generations with
-a reward function instead of matching a gold answer.
+`score` (1 = preferred, 0 = not). **RLFT** drops the target model turn entirely
+(`contents` ends on the user turn) and adds a `references` string→string dict of
+ground-truth metadata that the **reward function** reads to score generations —
+there is no gold answer to match. See the RLFT section below for the full shape.
 
 ## SFT hyperparameters (this repo's `launch_sft_job`)
 
@@ -82,6 +83,57 @@ of scored responses lives in `completions`:
   vs. the dispreferred reference in a blind A/B judgment); see
   `preference/evaluate.py`.
 
+## RLFT (reinforcement tuning) record + hyperparameters
+
+Implemented in `rlft/` (`launch_rlft_job`, builders in `schemas.rlft_example`).
+Same `client.tunings.tune(...)` as SFT/DPO — `method` is passed as the **string**
+`"REINFORCEMENT_TUNING"` (the `TuningMethod` enum only lists SFT/PREFERENCE/
+DISTILLATION, but the SDK is case-insensitive; confirmed by the SDK's own
+`tests/tunings/test_tune.py`). `reward_config` (and `composite_reward_config`,
+`samples_per_prompt`, `thinking_level`, `evaluate_interval`, `checkpoint_interval`,
+`max_output_tokens`, `batch_size`) are fields on `types.CreateTuningJobConfig`
+(verified against the installed `google-genai` 2.14.0, not assumed).
+
+Record shape — `contents` ends on a **user** turn; ground truth lives in
+`references` (a string→string dict), and there is **no** completion:
+
+```json
+{
+  "systemInstruction": {"parts": [{"text": "..."}]},
+  "contents": [{"role": "user", "parts": [{"text": "What is 17 * 23? End with 'Answer: <number>'."}]}],
+  "references": {"ground_truth_answer": "391"}
+}
+```
+
+- **Reward scorers** — one of four on `SingleReinforcementTuningRewardConfig`
+  (`reward_name` + a scorer): `string_match_reward_scorer`, `autorater_scorer`,
+  **`code_execution_reward_scorer`** (used here), or `cloud_run_reward_scorer`.
+  `CompositeReinforcementTuningRewardConfig` combines several.
+- **Code-execution contract** — the sandbox runs `python_code_snippet`, then calls
+  `evaluate(example, response) -> float` with **camelCase ProtoJSON** dicts
+  (`example` carries `references`/`systemInstruction`; `response` is a `Content`
+  with `parts`). Rewards are **clipped to `[-1, 1]`**. The snippet must be
+  **self-contained** (stdlib + numpy/pandas/sympy in the sandbox, no repo imports).
+  A job **auto-stops if >80%** of reward calls error or return `NaN`. This repo
+  ships `rlft/reward.py` verbatim via `inspect.getsource` — one tested function
+  used both as the training reward and for offline eval.
+- **Preflight** — `client.tunings.validate_reward(parent, sample_response, example,
+  single_reward_config=...)` scores one example before launch; a non-null `error`
+  or `NaN` means the reward is broken (`rlft/tune.py:validate_reward_config`).
+- **Hyperparameters** — `samples_per_prompt` (candidate generations per prompt for
+  reward comparison), plus `epoch_count`, `adapter_size`, `learning_rate_multiplier`,
+  `validation_dataset` as with SFT; `thinking_level` (`HIGH`/`MINIMAL`).
+- **Limits (docs):** ≤5,000 train / ≤500 val examples, ≤32,768 input/output tokens.
+- **Supported base model / regions:** docs specify `gemini-3.5-flash`; tuning in
+  `us-central1` / `europe-west4`; `v1beta1`. This repo's launcher defaults to
+  `gemini-2.5-flash` for consistency but documents the `gemini-3.5-flash`
+  recommendation — verify availability before running live.
+- **Best practice:** SFT first, then *continuous-tune* with RLFT. This repo's demo
+  tunes the base model directly to stay self-contained.
+- **Eval:** no gold label → reuse the reward. Generate per held-out prompt, score
+  with the same `evaluate`, report fraction with positive reward (accuracy); see
+  `rlft/evaluate.py`.
+
 ## Job lifecycle → endpoint
 
 - States: `JOB_STATE_{PENDING,RUNNING,SUCCEEDED,FAILED,CANCELLED}` (constants in
@@ -94,7 +146,10 @@ of scored responses lives in `completions`:
 
 ## Pre-GA / drift caveats
 
-- Pin RLFT to `v1beta1`; treat it as REST-only until a high-level SDK lands.
+- RLFT **is** supported in the installed `google-genai` SDK via
+  `method="REINFORCEMENT_TUNING"` + `reward_config` — it is *not* REST-only. It is
+  still `v1beta1`/Pre-GA, so re-verify the reward types and `method` string (and the
+  base-model string) before running.
 - Verify the base-model string at build time (e.g. `gemini-2.5-flash` vs a newer
   `gemini-3.x`); availability differs per tuning service and region.
 - Job region must match the GCS bucket region (see [[environment]]).
