@@ -18,5 +18,8 @@ dist/
 .coverage
 htmlcov/
 
+# Generated datasets (a small sample.jsonl is committed explicitly)
+datasets/**/*.jsonl
+
 # Editors / OS
 .DS_Store
