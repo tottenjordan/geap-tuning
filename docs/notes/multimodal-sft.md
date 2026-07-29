@@ -75,6 +75,25 @@ name), evaluates each on **val** with `run_image_eval`, picks the winner with
 `select_best_experiment` (max accuracy, name tie-break), then scores that one on
 **test**. Output is a printed comparison table — no plotting deps.
 
+## Managed eval is NOT available for multimodal tuning jobs
+
+Attaching an `evaluation_config` (the managed [Evaluation service](tuning-apis.md))
+to a multimodal SFT job **fails the job at training time** — verified 2026-07-29,
+google-genai 2.14.0 / GEAP `us-central1`. The job launches, stages fine, then the
+tuning service errors:
+
+> `code=3 (INVALID_ARGUMENT)` — *"Failed to convert GeminiTuneExamples to
+> Evaluation Examples. Multimodal is not supported for tunex evaluation datasets
+> at this time."*
+
+So managed evaluation is effectively **text-only** right now. For image SFT, get
+your metrics the other way: built-in Monitor/Metrics curves (automatic), exported
+checkpoints, and your own **offline** eval logged to Vertex AI Experiments /
+TensorBoard (see [experiment-tracking.md](experiment-tracking.md)). Do **not** pass
+`evaluation_config` to `launch_sft_job` for a `fileData` dataset. The text SFT path
+(e.g. the `geap-sft-metrics-demo` job) is the one that exercises the managed
+Evaluation layer end-to-end.
+
 ## Cost knobs
 
 Two live tuning jobs + one endpoint call per val/test image. `PER_CLASS` defaults

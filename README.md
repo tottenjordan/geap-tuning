@@ -187,6 +187,34 @@ demonstrates this with **oral-disease image classification**, ported from
 See [`docs/notes/multimodal-sft.md`](docs/notes/multimodal-sft.md) for the record
 shape, the GCS→local eval mapping, and cost knobs.
 
+### End-to-end sweep: multimodal SFT + managed eval + TensorBoard
+
+The multimodal example composes cleanly with the two cross-cutting services below.
+The diagram shows a **full-dataset** hyperparameter sweep that trains on the
+**entire 6,029-image** oral-disease train split and wires **both** GEAP's managed
+[Evaluation service](#evaluation) and [Vertex AI Experiments + Managed
+TensorBoard](#experiment-tracking) into each tuning job — SFT, evaluation, and
+experiment tracking in a single pipeline:
+
+![End-to-end multimodal SFT sweep: a shared data pipeline (Kaggle oral-disease dataset, entire 6,029-image train split plus 40-per-class val/test, staged to Cloud Storage) feeds two parallel gemini-2.5-flash-lite SFT runs — baseline (4 epochs, adapter 8) and wide (6 epochs, adapter 16); both attach GEAP's managed Evaluation service for per-checkpoint EXACT_MATCH/ROUGE/LLM-judge scoring to GCS and log params plus validation/test accuracy and macro-F1 to Vertex AI Experiments with Managed TensorBoard, converging into validation-based model selection and a held-out test score.](docs/imgs/vision-sft-sweep.png)
+
+- **Two parallel runs** on `gemini-2.5-flash-lite` from one shared data pipeline —
+  *baseline* (4 epochs, adapter 8, lr×1.0) and *wide* (6 epochs, adapter 16, lr×2.0)
+  — trained on the full train split (val/test capped at 40/class), staged to GCS.
+- **Managed evaluation per checkpoint** — each job attaches an `evaluation_config`
+  (EXACT_MATCH + ROUGE + an LLM-judge) so GEAP scores every checkpoint into
+  `gs://…/vision_eval_<config>/`.
+- **Experiment tracking** — each run logs its hyperparameters and offline val/test
+  accuracy & macro-F1 to a Vertex AI Experiment backed by Managed TensorBoard
+  (cross-run table + accuracy-vs-epoch curves).
+- **Selection** — offline validation scoring picks the best config, which is then
+  scored on the held-out test split → winning tuned-model endpoint.
+
+It's the same `launch_sft_job` call as text SFT, plus
+[`build_evaluation_config`](src/geap_tuning/autoeval.py) and the
+[`experiments`](src/geap_tuning/experiments.py) helper — three services composed
+in one run.
+
 ## Evaluation
 
 GEAP exposes a managed **Gen AI Evaluation service**, and this repo pairs it with

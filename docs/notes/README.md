@@ -9,6 +9,7 @@ Curated links to durable notes for this repo. Keep this file **under 200 lines**
 - [Checkpointing & continuous tuning](checkpoints-and-continuous-tuning.md) — `export_last_checkpoint_only`, per-checkpoint endpoints, default-checkpoint reassignment, SFT→RLFT chain.
 - [Multimodal (image) SFT](multimodal-sft.md) — `fileData` record shape, reuses `launch_sft_job`, kagglehub `vision` group, GCS↔local eval mapping, sweep→val-select→test.
 - [Environment & config](environment.md) — `.env` var groups, redundant aliases, region/bucket gotchas, auth.
+- [Tuned endpoints & cost](endpoints-and-cost.md) — tuned Gemini endpoints are serverless/per-token (idle ≠ hourly bill); cleanup is tidiness/quota, not runaway cost; manual teardown.
 - [Toolchain & standards](toolchain.md) — uv/ruff/ty/pytest setup, ruff `ALL` ignores, non-obvious config decisions.
 - [Experiment tracking](experiment-tracking.md) — automatic tuning-metric curves vs. opt-in Vertex AI Experiments; the `val_uri`→`/eval_*` link.
 
