@@ -21,6 +21,14 @@ htmlcov/
 # Generated datasets (a small sample.jsonl is committed explicitly)
 datasets/**/*.jsonl
 
+# Staged image datasets (e.g. multimodal SFT) + local eval artifacts — never
+# commit raw images or generated metrics; scoped to datasets/ so docs/imgs/ is safe
+datasets/**/*.jpg
+datasets/**/*.jpeg
+datasets/**/*.png
+datasets/**/*.webp
+datasets/**/*.csv
+
 # Editors / OS
 .DS_Store
 

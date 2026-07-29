@@ -185,6 +185,13 @@ standalone `client.evals` in google-genai 2.14.0. GEAP evaluates each checkpoint
 and writes results to GCS. Builders in `autoeval.py`; demoed by
 `examples/run_advanced_eval.py` / `07_advanced_eval`.
 
+> **Text-only:** attaching `evaluation_config` to a **multimodal** (`fileData`)
+> tuning dataset makes the job **fail at training time** — `code=3 … "Multimodal
+> is not supported for tunex evaluation datasets at this time."` (verified
+> 2026-07-29). Managed eval works across all *methods* but only for **text**
+> datasets; for image SFT use offline eval + Experiments instead. See
+> [multimodal-sft.md](multimodal-sft.md#managed-eval-is-not-available-for-multimodal-tuning-jobs).
+
 ![Managed GEAP evaluation vs. the repo's offline scorers](../imgs/evaluation.png)
 
 The managed service (left) and the repo's offline scorers (right) answer
