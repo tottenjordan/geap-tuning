@@ -357,11 +357,20 @@ Vertex AI Experiment for side-by-side comparison.
 ```python
 from geap_tuning.doe import SweepConfig, aggregate_results, run_sweep, select_best_run
 
-sweep = SweepConfig(name="cheap", base_model="gemini-2.5-flash-lite",
-                    grid={"epochs": [1, 2], "adapter_size": [4, 8]})   # 4 runs
-results = run_sweep(client, sweep, train_uri=train_uri, val_uri=val_uri,
-                    evaluate_fn=evaluate_fn, experiment="geap-doe-sft")
-rows = aggregate_results(results)                                       # table + charts
+sweep = SweepConfig(
+    name="cheap",
+    base_model="gemini-2.5-flash-lite",
+    grid={"epochs": [1, 2], "adapter_size": [4, 8]},
+)  # 4 runs
+results = run_sweep(
+    client,
+    sweep,
+    train_uri=train_uri,
+    val_uri=val_uri,
+    evaluate_fn=evaluate_fn,
+    experiment="geap-doe-sft",
+)
+rows = aggregate_results(results)  # table + charts
 best = select_best_run({r.spec.name: r.metrics for r in results})
 ```
 

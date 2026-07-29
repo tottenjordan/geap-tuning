@@ -12,7 +12,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from geap_tuning import doe
 from geap_tuning.doe import (
     RunResult,
     RunSpec,
@@ -123,7 +122,7 @@ def test_select_best_run_custom_metric() -> None:
 
 
 def test_select_best_run_empty_raises() -> None:
-    with pytest.raises(ValueError, match="No .* results"):
+    with pytest.raises(ValueError, match=r"No .* results"):
         select_best_run({})
 
 
@@ -137,7 +136,9 @@ def _result(name: str, params: dict, metrics: dict) -> RunResult:
         base_model="gemini-2.5-flash-lite",
         params=params,
     )
-    return RunResult(spec=spec, job_name=f"jobs/{name}", endpoint=f"ep/{name}", metrics=metrics, reused=False)
+    return RunResult(
+        spec=spec, job_name=f"jobs/{name}", endpoint=f"ep/{name}", metrics=metrics, reused=False
+    )
 
 
 def test_aggregate_results_flattens_params_and_metrics() -> None:
@@ -177,10 +178,13 @@ def no_tracking(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
 
 
 def _job(endpoint: str = "ep/x") -> SimpleNamespace:
-    return SimpleNamespace(name="jobs/x", tuned_model=SimpleNamespace(endpoint=endpoint, model=None))
+    return SimpleNamespace(
+        name="jobs/x", tuned_model=SimpleNamespace(endpoint=endpoint, model=None)
+    )
 
 
-def test_run_sweep_reuses_existing_job(no_tracking: dict[str, MagicMock]) -> None:
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_reuses_existing_job() -> None:
     client = MagicMock()
     launch = MagicMock()
     results = run_sweep(
@@ -197,11 +201,14 @@ def test_run_sweep_reuses_existing_job(no_tracking: dict[str, MagicMock]) -> Non
     assert results[0].metrics == {"accuracy": 0.9}
 
 
-def test_run_sweep_launches_when_absent_and_passes_params(no_tracking: dict[str, MagicMock]) -> None:
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_launches_when_absent_and_passes_params() -> None:
     client = MagicMock()
     seen: dict[str, object] = {}
 
-    def fake_launch(_client: object, spec: RunSpec, _train: str, _val: str | None) -> SimpleNamespace:
+    def fake_launch(
+        _client: object, spec: RunSpec, _train: str, _val: str | None
+    ) -> SimpleNamespace:
         seen["params"] = spec.params
         return _job()
 
@@ -218,11 +225,14 @@ def test_run_sweep_launches_when_absent_and_passes_params(no_tracking: dict[str,
     assert results[0].reused is False
 
 
-def test_run_sweep_default_launcher_calls_tune_with_params(no_tracking: dict[str, MagicMock]) -> None:
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_default_launcher_calls_tune_with_params() -> None:
     client = MagicMock()
     run_sweep(
         client,
-        SweepConfig(name="s", base_model="gemini-2.5-flash-lite", grid={"epochs": [2], "adapter_size": [8]}),
+        SweepConfig(
+            name="s", base_model="gemini-2.5-flash-lite", grid={"epochs": [2], "adapter_size": [8]}
+        ),
         train_uri="gs://b/train.jsonl",
         val_uri="gs://b/val.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
