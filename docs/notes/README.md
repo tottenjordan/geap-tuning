@@ -7,6 +7,7 @@ Curated links to durable notes for this repo. Keep this file **under 200 lines**
 - [GEAP tuning overview](geap-tuning-overview.md) — tuning methods, supported models, SDK paths, job→endpoint flow.
 - [Tuning APIs](tuning-apis.md) — per-service call shapes, JSONL schemas (SFT/DPO/RLFT), the four RLFT reward scorers + composite, managed-evaluation config (metric kinds, autorater, `evaluate_interval`), hyperparameters, Pre-GA caveats.
 - [Checkpointing & continuous tuning](checkpoints-and-continuous-tuning.md) — `export_last_checkpoint_only`, per-checkpoint endpoints, default-checkpoint reassignment, SFT→RLFT chain.
+- [Multimodal (image) SFT](multimodal-sft.md) — `fileData` record shape, reuses `launch_sft_job`, kagglehub `vision` group, GCS↔local eval mapping, sweep→val-select→test.
 - [Environment & config](environment.md) — `.env` var groups, redundant aliases, region/bucket gotchas, auth.
 - [Toolchain & standards](toolchain.md) — uv/ruff/ty/pytest setup, ruff `ALL` ignores, non-obvious config decisions.
 - [Experiment tracking](experiment-tracking.md) — automatic tuning-metric curves vs. opt-in Vertex AI Experiments; the `val_uri`→`/eval_*` link.
