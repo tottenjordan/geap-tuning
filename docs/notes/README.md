@@ -12,6 +12,7 @@ Curated links to durable notes for this repo. Keep this file **under 200 lines**
 - [Tuned endpoints & cost](endpoints-and-cost.md) — tuned Gemini endpoints are serverless/per-token (idle ≠ hourly bill); cleanup is tidiness/quota, not runaway cost; manual teardown.
 - [Toolchain & standards](toolchain.md) — uv/ruff/ty/pytest setup, ruff `ALL` ignores, non-obvious config decisions.
 - [Experiment tracking](experiment-tracking.md) — automatic tuning-metric curves vs. opt-in Vertex AI Experiments; the `val_uri`→`/eval_*` link.
+- [DOE & visualization](doe-and-visualization.md) — declarative SFT sweep + idempotent orchestration; cross-run bars/curves, which metric comes from where, the `viz` group.
 
 ## Diagrams
 

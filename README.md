@@ -374,6 +374,45 @@ optional `--tensorboard` time-series) is in
 [`docs/notes/experiment-tracking.md`](docs/notes/experiment-tracking.md) for the full API
 surface, the automatic-vs-opt-in split, and gotchas.
 
+## Design of experiments (DOE) & multi-run visualization
+
+Rather than hand-listing configs, declare a full-factorial **SFT** hyperparameter grid
+once and run it as a unit with [`doe.py`](src/geap_tuning/doe.py). `run_sweep` expands the
+grid into one run per point (each with a deterministic display name so re-runs **reuse**
+finished jobs instead of re-tuning), scores each tuned endpoint offline, and logs it to a
+Vertex AI Experiment for side-by-side comparison.
+
+```python
+from geap_tuning.doe import SweepConfig, aggregate_results, run_sweep, select_best_run
+
+sweep = SweepConfig(
+    name="cheap",
+    base_model="gemini-2.5-flash-lite",
+    grid={"epochs": [1, 2], "adapter_size": [4, 8]},
+)  # 4 runs
+results = run_sweep(
+    client,
+    sweep,
+    train_uri=train_uri,
+    val_uri=val_uri,
+    evaluate_fn=evaluate_fn,
+    experiment="geap-doe-sft",
+)
+rows = aggregate_results(results)  # table + charts
+best = select_best_run({r.spec.name: r.metrics for r in results})
+```
+
+Charts come from [`viz.py`](src/geap_tuning/viz.py) (`plot_grouped_metric_bars`,
+`plot_metric_bars`, `plot_curves`) — matplotlib + pandas in the optional **`viz`** group
+(`uv sync --group viz`), lazy-imported so the base package stays dependency-light. Full
+runs are in [`examples/run_doe.py`](examples/run_doe.py) /
+[`notebooks/10_doe.ipynb`](notebooks/10_doe.ipynb); the read-only
+[`run_multi_run_viz.py`](examples/run_multi_run_viz.py) /
+[`notebooks/11_multi_run_viz.ipynb`](notebooks/11_multi_run_viz.ipynb) chart an existing
+experiment at **zero tuning cost**. See
+[`docs/notes/doe-and-visualization.md`](docs/notes/doe-and-visualization.md) for which
+metric comes from where (notably: Layer-1 loss curves are console-only, not SDK-fetchable).
+
 ## Conventions
 
 Read [CODE_STANDARDS.md](CODE_STANDARDS.md) before writing code or changing the environment. Session notes live in [`docs/notes/`](docs/notes/README.md); guidance for AI agents is in [CLAUDE.md](CLAUDE.md).
@@ -389,7 +428,7 @@ geap-tuning/
 │   ├── preference/              # preference tuning / DPO
 │   └── rlft/                    # reinforcement learning fine-tuning + reward builders
 ├── examples/                    # runnable run_*.py drivers (one per demo; live GCP + cost)
-├── notebooks/                   # thin 01–09 notebooks mirroring the examples
+├── notebooks/                   # thin 01–11 notebooks mirroring the examples
 ├── tests/                       # pytest suite — mocked clients, no live GCP
 │   ├── sft/
 │   ├── sft_vision/
