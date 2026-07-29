@@ -376,11 +376,12 @@ surface, the automatic-vs-opt-in split, and gotchas.
 
 ## Design of experiments (DOE) & multi-run visualization
 
-Rather than hand-listing configs, declare a full-factorial **SFT** hyperparameter grid
-once and run it as a unit with [`doe.py`](src/geap_tuning/doe.py). `run_sweep` expands the
-grid into one run per point (each with a deterministic display name so re-runs **reuse**
-finished jobs instead of re-tuning), scores each tuned endpoint offline, and logs it to a
-Vertex AI Experiment for side-by-side comparison.
+Rather than hand-listing configs, declare a full-factorial hyperparameter grid once and
+run it as a unit with [`doe.py`](src/geap_tuning/doe.py). `run_sweep` expands the grid into
+one run per point (each with a deterministic display name so re-runs **reuse** finished jobs
+instead of re-tuning), scores each tuned endpoint offline, and logs it to a Vertex AI
+Experiment for side-by-side comparison. The same driver runs **SFT, DPO, and RLFT** sweeps
+— set `SweepConfig.method` (`"SFT"` / `"DPO"` / `"RLFT"`).
 
 ```python
 from geap_tuning.doe import SweepConfig, aggregate_results, run_sweep, select_best_run
@@ -406,7 +407,11 @@ Charts come from [`viz.py`](src/geap_tuning/viz.py) (`plot_grouped_metric_bars`,
 `plot_metric_bars`, `plot_curves`) — matplotlib + pandas in the optional **`viz`** group
 (`uv sync --group viz`), lazy-imported so the base package stays dependency-light. Full
 runs are in [`examples/run_doe.py`](examples/run_doe.py) /
-[`notebooks/10_doe.ipynb`](notebooks/10_doe.ipynb); the read-only
+[`notebooks/10_doe.ipynb`](notebooks/10_doe.ipynb) (SFT), and
+[`examples/run_doe_dpo.py`](examples/run_doe_dpo.py) +
+[`examples/run_doe_rlft.py`](examples/run_doe_rlft.py) /
+[`notebooks/12_doe_dpo_rlft.ipynb`](notebooks/12_doe_dpo_rlft.ipynb) (DPO & RLFT — DPO
+headlines `win_rate`, RLFT carries its reward in `sweep.fixed`); the read-only
 [`run_multi_run_viz.py`](examples/run_multi_run_viz.py) /
 [`notebooks/11_multi_run_viz.ipynb`](notebooks/11_multi_run_viz.ipynb) chart an existing
 experiment at **zero tuning cost**. See

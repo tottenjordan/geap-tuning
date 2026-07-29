@@ -26,6 +26,7 @@ diagrams.
 | 09 | [`09_sft_vision.ipynb`](09_sft_vision.ipynb) | **Multimodal (image) SFT** — oral-disease classification from `fileData` image records; sweep → val-select → test | [`run_sft_vision.py`](../examples/run_sft_vision.py) |
 | 10 | [`10_doe.ipynb`](10_doe.ipynb) | **Design of experiments (DOE)** — declarative SFT hyperparameter sweep with idempotent reuse; aggregate + chart the runs | [`run_doe.py`](../examples/run_doe.py) |
 | 11 | [`11_multi_run_viz.ipynb`](11_multi_run_viz.ipynb) | **Multi-run visualization** (read-only, no tuning cost) — chart runs already tracked in an Experiment | [`run_multi_run_viz.py`](../examples/run_multi_run_viz.py) |
+| 12 | [`12_doe_dpo_rlft.ipynb`](12_doe_dpo_rlft.ipynb) | **DOE for DPO & RLFT** — the same sweep driver for preference tuning (headline `win_rate`) and reinforcement tuning (declarative reward in `fixed`) | [`run_doe_dpo.py`](../examples/run_doe_dpo.py) / [`run_doe_rlft.py`](../examples/run_doe_rlft.py) |
 
 ## Suggested order
 
@@ -35,9 +36,10 @@ cross-cutting features: **04** (checkpointing) and **05** (continuous tuning).
 service respectively, and can be read on their own once you've done 03. **08**
 adds opt-in Vertex AI Experiments / Managed TensorBoard tracking on top of any
 tuning run and reuses the checkpoint flow from **04**. **09** applies SFT to
-images. **10** builds on **08** to run a whole hyperparameter sweep as one unit,
-and **11** charts a sweep's runs read-only (no tuning cost) — start there if an
-experiment already exists.
+images. **10** builds on **08** to run a whole SFT hyperparameter sweep as one
+unit, **11** charts a sweep's runs read-only (no tuning cost) — start there if an
+experiment already exists — and **12** runs the same sweep driver for DPO and
+RLFT (read **02**/**03** first).
 
 ## Reference
 
