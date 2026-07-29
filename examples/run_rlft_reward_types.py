@@ -31,6 +31,7 @@ tuning and ``validate_reward``.
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 from geap_tuning.config import genai_client, load_config
@@ -67,8 +68,13 @@ BASE_MODEL = "gemini-3.5-flash"
 CLOUD_RUN_URI = "https://reward-scorer-xxxxxxxx-uc.a.run.app"
 
 
-def main() -> None:
-    """Preflight each reward shape, then launch one composite-reward RLFT job."""
+def main(*, preflight_only: bool = False) -> None:
+    """Preflight each reward shape, then launch one composite-reward RLFT job.
+
+    With ``preflight_only=True`` the function stops after the (free)
+    ``validate_reward`` calls — no GCS upload, no tuning job, no cost — so you can
+    smoke-test the new reward shapes against the live API before spending.
+    """
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
     print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
@@ -115,6 +121,10 @@ def main() -> None:
         )
         print(f"Preflight [{name}]: {result}")
 
+    if preflight_only:
+        print("Preflight-only: skipping GCS upload and tuning job (no cost incurred).")
+        return
+
     # 5. Stage train/val to GCS.
     train_uri = upload_file(paths["train"], f"{cfg.bucket}/{GCS_PREFIX}/train.jsonl")
     val_uri = upload_file(paths["val"], f"{cfg.bucket}/{GCS_PREFIX}/val.jsonl")
@@ -150,4 +160,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help="Only run the free validate_reward preflights; skip GCS upload and the tuning job.",
+    )
+    args = parser.parse_args()
+    main(preflight_only=args.preflight_only)
