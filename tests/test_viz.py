@@ -81,6 +81,23 @@ def test_normalize_experiment_rows_strips_prefixes() -> None:
     assert rows[1]["run"] == "r2"
 
 
+def test_drop_rows_missing_metrics_removes_all_nan_rows() -> None:
+    nan = float("nan")
+    rows = [
+        {"run": "curve", "accuracy": nan, "macro_f1": nan},  # time-series-only run
+        {"run": "cp-1", "accuracy": 0.6, "macro_f1": 0.4},
+        {"run": "cp-2", "accuracy": 0.7},  # macro_f1 absent but accuracy present
+    ]
+    kept = viz.drop_rows_missing_metrics(rows)
+    assert [r["run"] for r in kept] == ["cp-1", "cp-2"]
+
+
+def test_drop_rows_missing_metrics_respects_metric_selection() -> None:
+    rows = [{"run": "a", "accuracy": 0.5, "macro_f1": float("nan")}]
+    assert viz.drop_rows_missing_metrics(rows, metrics=("macro_f1",)) == []
+    assert len(viz.drop_rows_missing_metrics(rows, metrics=("accuracy",))) == 1
+
+
 # --- plots (rendering mocked) --------------------------------------------------
 
 

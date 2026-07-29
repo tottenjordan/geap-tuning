@@ -24,12 +24,14 @@ from geap_tuning.config import load_config
 from geap_tuning.experiments import experiment_dataframe, init_experiment
 from geap_tuning.viz import (
     dataframe_to_rows,
+    drop_rows_missing_metrics,
     normalize_experiment_rows,
     plot_grouped_metric_bars,
     plot_metric_bars,
 )
 
 DEFAULT_EXPERIMENT = "geap-doe-sft"
+METRICS = ("accuracy", "macro_f1")
 
 
 def _arg(flag: str, default: str) -> str:
@@ -49,7 +51,11 @@ def main() -> None:
     # Point the SDK at the region so the experiment resolves (no jobs launched).
     init_experiment(experiment, project=cfg.project, location=cfg.location)
     frame = experiment_dataframe(experiment)
-    rows = normalize_experiment_rows(dataframe_to_rows(frame))
+    # Drop runs with no summary metrics (e.g. time-series-only runs whose
+    # accuracy/macro_f1 are NaN) so mixed experiments don't plot empty bars.
+    rows = drop_rows_missing_metrics(
+        normalize_experiment_rows(dataframe_to_rows(frame)), metrics=METRICS
+    )
     print(f"Experiment '{experiment}': {len(rows)} runs")
     for row in rows:
         print(f"  {row}")

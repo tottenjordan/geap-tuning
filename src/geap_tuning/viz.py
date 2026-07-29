@@ -85,6 +85,29 @@ def normalize_experiment_rows(
     return normalized
 
 
+def _is_missing(value: Any) -> bool:  # noqa: ANN401 - accepts any cell value
+    """True if ``value`` is absent-like: ``None`` or a NaN float (``v != v``)."""
+    return value is None or value != value  # noqa: PLR0124 - NaN self-inequality check
+
+
+def drop_rows_missing_metrics(
+    rows: Sequence[Mapping[str, Any]],
+    metrics: Sequence[str] = _DEFAULT_METRICS,
+) -> list[dict[str, Any]]:
+    """Drop rows that have **no** usable value for any of ``metrics``.
+
+    A read-back experiment can mix run kinds — e.g. a time-series-only run stores
+    its values under ``time_series_metric.*`` and leaves the summary ``accuracy`` /
+    ``macro_f1`` as ``NaN``. Such a row would plot as an empty bar cluster, so we
+    keep a row only when at least one requested metric is present and non-NaN.
+    """
+    return [
+        dict(row)
+        for row in rows
+        if any(metric in row and not _is_missing(row[metric]) for metric in metrics)
+    ]
+
+
 def plot_metric_bars(
     rows: Sequence[Mapping[str, Any]],
     *,

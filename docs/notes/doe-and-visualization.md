@@ -65,6 +65,10 @@ takes already-shaped rows and returns a matplotlib `Figure` (no GCP).
   renames `run_name` → `run` from an `experiment_dataframe`, so a **read-back**
   dataframe plots identically to `aggregate_results` output. This is what makes the
   zero-cost notebook 11 path work.
+- `drop_rows_missing_metrics(rows, metrics)` — drops rows with no usable value for
+  **any** requested metric. A mixed experiment can hold time-series-only runs whose
+  summary `accuracy`/`macro_f1` are `NaN`; without this they'd plot as empty bar
+  clusters. `run_multi_run_viz.py` applies it right after `normalize_experiment_rows`.
 - `plot_metric_bars(rows, *, metric)`, `plot_grouped_metric_bars(rows, *, metrics)`,
   `plot_curves(series, *, metric)` (one line per run over `(x, value)` points, fed by
   `collect_checkpoint_curve`).
