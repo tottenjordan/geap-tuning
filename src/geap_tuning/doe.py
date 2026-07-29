@@ -112,16 +112,24 @@ def expand_grid(grid: Mapping[str, Sequence[Any]]) -> list[dict[str, Any]]:
 
 
 def run_spec_slug(point: Mapping[str, Any]) -> str:
-    """Return a deterministic, display-name-safe slug for a grid ``point``.
+    """Return a deterministic, resource-ID-safe slug for a grid ``point``.
 
-    Keys are sorted; each ``key<value>`` pair is joined by ``-``; any character
-    that is not alphanumeric or ``-`` (e.g. the ``.`` in a float) becomes ``_``.
-    An empty point slugs to ``"default"``.
+    The slug becomes part of the run's ``display_name``, which is reused both as
+    the tuning-job display name and as the Vertex AI Experiments run name. Vertex
+    resource IDs must match ``[a-z0-9][a-z0-9-]{0,127}`` (lowercase alphanumerics
+    and hyphens only — **no underscores**), so keys are sorted, each
+    ``key<value>`` pair is joined by ``-``, everything is lowercased, and any
+    other character (the ``_`` in a key like ``adapter_size`` or the ``.`` in a
+    float) becomes ``-``. Leading/trailing hyphens are stripped. An empty point
+    slugs to ``"default"``.
     """
     if not point:
         return "default"
     raw = "-".join(f"{key}{point[key]}" for key in sorted(point))
-    return "".join(char if char.isalnum() or char == "-" else "_" for char in raw)
+    safe = "".join(
+        char if char.isascii() and (char.isalnum() or char == "-") else "-" for char in raw.lower()
+    )
+    return safe.strip("-") or "default"
 
 
 def build_run_specs(sweep: SweepConfig) -> list[RunSpec]:

@@ -30,8 +30,11 @@ Declare a full-factorial grid once; run it as a unit.
   (e.g. an RLFT `reward_config`) here.
 - `expand_grid(grid)` — full cross-product over **sorted** keys (deterministic);
   empty grid → `[{}]`.
-- `run_spec_slug(point)` — deterministic, display-name-safe slug (sorted `key<value>`,
-  non-alnum → `_`, so `1.0` → `1_0`); empty → `"default"`.
+- `run_spec_slug(point)` — deterministic, **resource-ID-safe** slug (sorted
+  `key<value>`, lowercased, every non-`[a-z0-9-]` char → `-`, so `adapter_size` →
+  `adapter-size` and `1.0` → `1-0`); empty → `"default"`. Underscores are **not**
+  allowed: the slug feeds `display_name`, reused as both the tuning-job display name
+  and the Vertex AI Experiments run name, which must match `[a-z0-9][a-z0-9-]{0,127}`.
 - `build_run_specs(sweep)` — one `RunSpec` per point; `display_name =
   f"geap-doe-{sweep.name}-{slug}"` is the **idempotency key**; `params = fixed | point`.
 - `run_sweep(client, sweep, *, train_uri, val_uri, evaluate_fn, experiment=..., ...)`
@@ -119,6 +122,12 @@ from our own offline per-checkpoint eval — never from Layer-1.
 - **`experiment_dataframe` columns are prefixed** (`metric.`, `param.`, `run_name`)
   — plot directly and `metric="accuracy"`/`label_key="run"` won't match. Run it
   through `normalize_experiment_rows` first.
+- **Slugs must be Vertex-resource-ID-safe — no underscores.** The run slug feeds
+  `display_name`, reused as both the tuning-job display name *and* the Experiments
+  run name, which are validated against `[a-z0-9][a-z0-9-]{0,127}`. An underscore
+  (from a key like `adapter_size` or a `.`→`_` float) makes `aiplatform.start_run`
+  400 with `resource ID … must match the regular expression`. `run_spec_slug`
+  lowercases and maps every non-`[a-z0-9-]` char to `-` for this reason.
 - **Idempotency is by display name.** Re-running a sweep reuses finished jobs; to
   force a re-tune, change `sweep.name` or the grid (both change the slug).
 - **Curves need all checkpoints.** `run_sweep`'s default launcher sets

@@ -7,6 +7,7 @@ logging is monkeypatched (mirroring ``tests/test_experiments.py``) so nothing
 here touches live GCP.
 """
 
+import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -60,7 +61,8 @@ def test_expand_grid_is_deterministic_over_sorted_keys() -> None:
 
 
 def test_run_spec_slug_sorted_and_joined() -> None:
-    assert run_spec_slug({"epochs": 2, "adapter_size": 8}) == "adapter_size8-epochs2"
+    # Underscores in the key are hyphenated: Vertex resource IDs are [a-z0-9-] only.
+    assert run_spec_slug({"epochs": 2, "adapter_size": 8}) == "adapter-size8-epochs2"
 
 
 def test_run_spec_slug_empty_point() -> None:
@@ -69,8 +71,15 @@ def test_run_spec_slug_empty_point() -> None:
 
 def test_run_spec_slug_floats_are_display_safe() -> None:
     slug = run_spec_slug({"learning_rate_multiplier": 1.0})
-    assert slug == "learning_rate_multiplier1_0"
+    assert slug == "learning-rate-multiplier1-0"
     assert "." not in slug
+    assert "_" not in slug
+
+
+def test_run_spec_slug_is_resource_id_safe() -> None:
+    # Every realistic grid key/value must yield an ID matching the Vertex regex.
+    slug = run_spec_slug({"adapter_size": 8, "learning_rate_multiplier": 0.5})
+    assert re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", slug)
 
 
 def test_run_spec_slug_is_deterministic() -> None:
