@@ -2,6 +2,10 @@
 
 Facts about Gemini Enterprise Agent Platform (GEAP) model tuning, gathered from Google Cloud docs (`docs.cloud.google.com/gemini-enterprise-agent-platform/models/...`) on 2026-07-28. Re-verify model lists and SDK symbols against live docs before relying on them — this surface changes fast. See also [environment](environment.md).
 
+![GEAP tuning reference architecture](../imgs/reference-architecture.png)
+
+_Reference architecture: the `geap_tuning` package (regional Gen AI SDK client) stages JSONL in a region-matched GCS bucket, launches an SFT/DPO/RLFT tuning job on the Vertex/GEAP backend, and gets back a tuned endpoint plus checkpoints and managed-eval results in GCS. Diagram sources live in [`docs/imgs/`](../imgs/)._
+
 ## Tuning methods
 
 | Method | What it does | Notable |
@@ -20,6 +24,10 @@ Checkpointing and continuous tuning are **implemented** as cross-cutting demos �
 Gemini 3.5 Flash, 3.1 Flash-Lite, 2.5 Pro, 2.5 Flash, 2.5 Flash-Lite. Checkpoints + continuous tuning: same list. Preference tuning: only 2.5 Flash / Flash-Lite.
 
 ## Job → endpoint flow
+
+![End-to-end GEAP tuning workflow](../imgs/tuning-workflow.png)
+
+_The seven-stage lifecycle every example follows (build → stage → preflight → launch → tune+eval → endpoint → offline eval), with the continuous-tuning and checkpoint-reassignment loops._
 
 1. Stage JSONL train (+ optional validation) dataset in Cloud Storage.
 2. Create tuning job — via Cloud console (Agent Platform Studio → "Create tuned model"), Gen AI SDK, Vertex SDK, REST, or Colab Enterprise side panel.

@@ -105,6 +105,8 @@ Record shape — `contents` ends on a **user** turn; ground truth lives in
 }
 ```
 
+![RLFT reward-scorer types and composite reward](../imgs/rlft-reward-types.png)
+
 - **Reward scorers** — one of four on `SingleReinforcementTuningRewardConfig`
   (`reward_name` + exactly one scorer). All four have builders in `rlft/tune.py`
   (`build_*_reward_config`); demoed by `examples/run_rlft_reward_types.py` /
@@ -182,6 +184,12 @@ Reached **only via `CreateTuningJobConfig.evaluation_config`** — there is no
 standalone `client.evals` in google-genai 2.14.0. GEAP evaluates each checkpoint
 and writes results to GCS. Builders in `autoeval.py`; demoed by
 `examples/run_advanced_eval.py` / `07_advanced_eval`.
+
+![Managed GEAP evaluation vs. the repo's offline scorers](../imgs/evaluation.png)
+
+The managed service (left) and the repo's offline scorers (right) answer
+different questions and are used together — see the comparison in
+[README → Evaluation](../../README.md#evaluation).
 
 - **`EvaluationConfig`** fields: `metrics`, `output_config`, `autorater_config`,
   `inference_generation_config`.

@@ -11,4 +11,8 @@ Curated links to durable notes for this repo. Keep this file **under 200 lines**
 - [Toolchain & standards](toolchain.md) — uv/ruff/ty/pytest setup, ruff `ALL` ignores, non-obvious config decisions.
 - [Experiment tracking](experiment-tracking.md) — automatic tuning-metric curves vs. opt-in Vertex AI Experiments; the `val_uri`→`/eval_*` link.
 
+## Diagrams
+
+Reference-architecture and workflow diagrams live in [`docs/imgs/`](../imgs/) and are embedded in the [README](../../README.md) and the notes above: `reference-architecture.png`, `tuning-workflow.png`, `rlft-reward-types.png`, `evaluation.png`. Regenerate them with the PaperBanana MCP tool from the source contexts in the README sections they illustrate.
+
 <!-- Add one line per new note: - [Title](file.md) — hook -->

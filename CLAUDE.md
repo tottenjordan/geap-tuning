@@ -61,3 +61,7 @@ Persist durable findings under `docs/notes/`, organized by topic:
 - Save a note only when the info **outlives this conversation and isn't recoverable** from the repo, git history, this file, or existing docs (e.g. "the tuning job region must match the bucket region", "SDK X's `list()` returns objects not names").
 - **Check for an existing note on the topic and update it** instead of creating a duplicate. **Delete notes that turn out wrong or stale.**
 - Notes reflect what was true when written. If a note names a file, flag, or SDK symbol, **re-verify it still exists before acting on it.**
+
+## Diagrams
+
+Reference-architecture and workflow diagrams live in `docs/imgs/` (`reference-architecture.png`, `tuning-workflow.png`, `rlft-reward-types.png`, `evaluation.png`) and are embedded in `README.md` and `docs/notes/`. They were generated with the **PaperBanana MCP tool** (`generate_diagram`) from source contexts describing the system; regenerate/update them there rather than hand-drawing, and re-optimize large PNGs (resize to ~1800px + 256-color quantize) before committing so the repo stays lean.

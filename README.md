@@ -15,7 +15,15 @@
 
 <p><em>Working, runnable examples of <b>Gemini Enterprise Agent Platform (GEAP)</b> model tuning services —<br><b>supervised fine-tuning (SFT)</b>, <b>preference tuning (DPO)</b>, and <b>reinforcement learning fine-tuning (RLFT)</b> —<br>built on the Google Gen AI SDK against the Vertex/Agent Platform backend.</em></p>
 
+<img src="docs/imgs/reference-architecture.png" alt="GEAP tuning reference architecture: the geap_tuning package stages JSONL datasets in Cloud Storage and launches a regional Vertex AI / GEAP tuning job (SFT, DPO, or RLFT) that returns a tuned model endpoint plus checkpoints and managed-evaluation results in GCS." width="100%">
+
 </div>
+
+The `geap_tuning` package (uv-managed, Google Gen AI SDK, **regional** client)
+stages JSONL datasets in a region-matched Cloud Storage bucket, then launches a
+Vertex AI / GEAP tuning job whose method is SFT, DPO, or RLFT. The job produces a
+**tuned model endpoint** plus per-epoch checkpoints and managed-evaluation results
+in GCS; the package's offline scorers and inference call the returned endpoint.
 
 ## Setup
 
@@ -43,6 +51,33 @@ make dev               # uv sync --all-groups
 | Run the continuous-tuning demo | `uv run python examples/run_continuous_tuning.py` (requires live GCP + incurs tuning cost) |
 | Run the RLFT reward-types tour | `uv run python examples/run_rlft_reward_types.py` (requires live GCP + incurs tuning cost) |
 | Run the advanced-evaluation demo | `uv run python examples/run_advanced_eval.py` (requires live GCP + incurs tuning cost) |
+
+## Workflow
+
+Every example follows the same end-to-end lifecycle — only the record shape,
+launcher, and reward/eval knobs change per method:
+
+![End-to-end GEAP tuning workflow: build JSONL, stage in Cloud Storage, optionally preflight an RLFT reward, launch a job with managed evaluation attached, evaluate each checkpoint, then score offline against the tuned endpoint; a continuous-tuning loop feeds the tuned model back as the base model.](docs/imgs/tuning-workflow.png)
+
+1. **Build the dataset** — JSONL records; the shape varies by method (SFT
+   `contents`, DPO `completions` + `score`, RLFT `references` + a reward function).
+2. **Stage in GCS** — `upload_file(...)` puts the train/val splits in the
+   region-matched bucket.
+3. **Preflight the reward** (RLFT only, free) — `validate_reward_config(...)`
+   scores one sample before spending on a job.
+4. **Launch the job** — a `launch_*_job(...)` wrapper around
+   `client.tunings.tune(...)`; attach an `evaluation_config` and keep
+   `export_last_checkpoint_only=False` so eval runs per checkpoint.
+5. **Tune + evaluate** — GEAP emits one checkpoint per epoch and (if configured)
+   evaluates each, writing results to GCS.
+6. **Resolve the endpoint** — `wait_for_tuning_job(...)` returns the tuned model
+   endpoint.
+7. **Score offline + infer** — the repo's scorers (accuracy / win-rate /
+   reward-accuracy) and `generate_content` call the endpoint.
+
+The **continuous-tuning** loop feeds a tuned model back as `base_model` (the demo
+chains **SFT → RLFT**), and **checkpoint reassignment** picks the best checkpoint
+as the model's default — see below.
 
 ## Checkpointing & continuous tuning
 
@@ -74,6 +109,8 @@ in [`rlft/tune.py`](src/geap_tuning/rlft/tune.py), toured by
 `examples/run_rlft_reward_types.py` +
 [`notebooks/06_rlft_reward_types.ipynb`](notebooks/06_rlft_reward_types.ipynb):
 
+![RLFT reward-scorer types: code-execution, string-match, autorater, and cloud-run (documented-only) scorers combine through build_composite_reward_config into a weighted composite reward; validate_reward preflights any scorer for free before launch.](docs/imgs/rlft-reward-types.png)
+
 - **code-execution** (`build_reward_config`) — verifiable correctness; ships
   tested Python via `inspect.getsource` (the default reward).
 - **string-match** (`build_string_match_reward_config`) — cheap, declarative
@@ -93,6 +130,8 @@ before spending on a job.
 
 GEAP exposes a managed **Gen AI Evaluation service**, and this repo pairs it with
 its own **offline** scoring. They answer different questions — use both:
+
+![Two evaluation paths: managed GEAP evaluation runs inside the tuning job (EvaluationConfig, per-checkpoint, multi-metric, results written to GCS, us-central1 Preview) while the repo's offline scorers run locally against the tuned endpoint and return a Python dict (SFT accuracy, DPO win-rate, RLFT reward-accuracy).](docs/imgs/evaluation.png)
 
 | | GEAP Evaluation service (managed) | Offline `evaluate.py` (this repo) |
 |---|---|---|
