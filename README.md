@@ -45,6 +45,7 @@ make dev               # uv sync --all-groups
 | Single test | `uv run pytest tests/test_smoke.py::test_main_runs` |
 | Provision GCP resources | `./scripts/bootstrap_gcp.sh` (enables APIs + creates the region-matched bucket; idempotent, needs `gcloud auth login` first) |
 | Run the SFT example | `uv run python examples/run_sft.py` (requires live GCP + incurs tuning cost) |
+| Run the multimodal image SFT sweep | `uv sync --group vision && uv run python examples/run_sft_vision.py` (requires live GCP + a Kaggle token + incurs tuning cost) |
 | Run the DPO example | `uv run python examples/run_preference.py` (requires live GCP + incurs tuning cost) |
 | Run the RLFT example | `uv run python examples/run_rlft.py` (requires live GCP + incurs tuning cost) |
 | Run the checkpointing demo | `uv run python examples/run_checkpoints.py` (requires live GCP + incurs tuning cost) |
@@ -162,6 +163,29 @@ weighted reward (e.g. code-exec 0.8 + autorater 0.2); pass it to `launch_rlft_jo
 / `validate_reward_config` as `composite_reward_config=` (mutually exclusive with
 the single `reward_config`). Preflight any reward with `validate_reward_config`
 before spending on a job.
+
+## Multimodal (image) SFT
+
+The SFT record shape is multimodal — a `user` turn can carry a `fileData` image
+part (a `mimeType` + a `gs://` `fileUri`) alongside text. `geap_tuning.sft_vision`
+demonstrates this with **oral-disease image classification**, ported from
+[jswortz/dental-fine-tune-26](https://github.com/jswortz/dental-fine-tune-26):
+`examples/run_sft_vision.py` +
+[`notebooks/09_sft_vision.ipynb`](notebooks/09_sft_vision.ipynb).
+
+- **Same tune call** — multimodal SFT differs from text SFT *only* in the records,
+  so it reuses `launch_sft_job`; no new tune module.
+- **Dataset** — Kaggle *Multi-Class Oral Disease Detection Dataset*
+  (`singh868/multi-class-oral-disease-detection-dataset`, by Rahul Singh, **CC
+  BY-SA 4.0**), auto-downloaded via the optional `vision` group (`kagglehub`,
+  `uv sync --group vision`) using a `KAGGLE_API_TOKEN`. Images are staged to GCS;
+  no image bytes are committed (only a tiny `sample.jsonl`).
+- **Sweep → val-select → test** — trains two configs, evaluates each on the
+  validation split, picks the best, scores the winner on the test split, and
+  prints a comparison table.
+
+See [`docs/notes/multimodal-sft.md`](docs/notes/multimodal-sft.md) for the record
+shape, the GCS→local eval mapping, and cost knobs.
 
 ## Evaluation
 
@@ -333,12 +357,14 @@ geap-tuning/
 ├── src/geap_tuning/             # the package — shared helpers: config, gcs, jobs,
 │   │                            #   autoeval, inference, schemas
 │   ├── sft/                     # supervised fine-tuning (data, tune, evaluate)
+│   ├── sft_vision/              # multimodal (image) SFT — oral-disease classification
 │   ├── preference/              # preference tuning / DPO
 │   └── rlft/                    # reinforcement learning fine-tuning + reward builders
 ├── examples/                    # runnable run_*.py drivers (one per demo; live GCP + cost)
-├── notebooks/                   # thin 01–08 notebooks mirroring the examples
+├── notebooks/                   # thin 01–09 notebooks mirroring the examples
 ├── tests/                       # pytest suite — mocked clients, no live GCP
 │   ├── sft/
+│   ├── sft_vision/
 │   ├── preference/
 │   └── rlft/
 ├── datasets/                    # JSONL datasets (gitignored; a sample.jsonl is committed)
