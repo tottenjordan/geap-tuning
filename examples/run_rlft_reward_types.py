@@ -64,6 +64,11 @@ DISPLAY_NAME = f"geap-rlft-rewards-{VERSION}"
 DATA_DIR = Path("datasets/rlft_math")
 GCS_PREFIX = "rlft_rewards"
 BASE_MODEL = "gemini-3.5-flash"
+# The autorater scorer REQUIRES an explicit judge model, and the live API only
+# accepts a **fully-qualified publisher resource path** — bare names like
+# "gemini-2.5-flash" or "publishers/google/models/..." fail with an opaque
+# "Internal error occurred for computing reward". Built from cfg in main().
+AUTORATER_JUDGE = "gemini-2.5-flash"
 # A placeholder Cloud Run URL — the cloud-run scorer is documented-only here.
 CLOUD_RUN_URI = "https://reward-scorer-xxxxxxxx-uc.a.run.app"
 
@@ -88,7 +93,11 @@ def main(*, preflight_only: bool = False) -> None:
     # 2. Build each single reward shape (cloud-run is documented-only).
     code_reward = build_reward_config(reward_name="math_correctness")
     string_reward = build_string_match_reward_config()
-    autorater_reward = build_autorater_reward_config()
+    autorater_model = (
+        f"projects/{cfg.project}/locations/{cfg.location}"
+        f"/publishers/google/models/{AUTORATER_JUDGE}"
+    )
+    autorater_reward = build_autorater_reward_config(autorater_model=autorater_model)
     cloud_run_reward = build_cloud_run_reward_config(
         reward_name="external_scorer", cloud_run_uri=CLOUD_RUN_URI
     )

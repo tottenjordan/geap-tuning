@@ -96,9 +96,13 @@ def build_autorater_reward_config(
     A judge model runs ``autorater_prompt`` over each generation; its reply is
     parsed with a ``REGEX_EXTRACT`` (``SCORE:\\s*([01])``) and converted to a
     reward via an exact-match on ``"1"`` (reward 1.0) vs. otherwise (0.0).
-    ``autorater_model`` defaults to the service default when ``None``; pass a
-    fully-qualified publisher model or tuned endpoint to override.
-    ``sampling_count`` (1-32) sets how many judge samples are averaged.
+    ``autorater_model`` is **required by the live API** (there is no service
+    default — an empty ``autorater_config`` fails with "Missing autorater model")
+    and must be a **fully-qualified publisher resource path**, e.g.
+    ``projects/<p>/locations/<l>/publishers/google/models/gemini-2.5-flash``;
+    bare names or ``publishers/...`` fragments fail with an opaque "Internal
+    error occurred for computing reward". ``sampling_count`` (1-32) sets how many
+    judge samples are averaged.
 
     NOTE: RLFT is Pre-GA — re-verify the parse/scorer enum names
     (:class:`~google.genai.types.ResponseParseType`,
