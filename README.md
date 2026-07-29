@@ -292,50 +292,35 @@ job are needed; the metrics appear once the job starts running.
 
 To compare *multiple* tuning runs — a hyperparameter sweep over `adapter_size`, `epochs`,
 `learning_rate_multiplier`, or (RLFT) `samples_per_prompt` — and to record your own offline
-eval numbers (e.g. the held-out accuracy from `run_rlft_eval`) alongside each run, wrap the
-launch in a **Vertex AI Experiment**. This lives on the `google-cloud-aiplatform` SDK (already
-a dependency), *complementing* the `google.genai` tuning call — Experiments is orchestration
-around the job, so mixing the two SDKs here is intentional, not a violation of the
-"one SDK path per example" rule (see [CLAUDE.md](CLAUDE.md)).
+eval numbers (e.g. the held-out accuracy from `run_eval`) alongside each run, log to a
+**Vertex AI Experiment** via the [`experiments`](src/geap_tuning/experiments.py) helper. It
+wraps `google-cloud-aiplatform` (already a dependency), *complementing* the `google.genai`
+tuning call — Experiments is orchestration around the job, so mixing the two SDKs here is
+intentional, not a violation of the "one SDK path per example" rule (see [CLAUDE.md](CLAUDE.md)).
 
 ```python
-from google.cloud import aiplatform
+from geap_tuning.experiments import init_experiment, track_run, log_summary_metrics
 
-from geap_tuning.config import load_config, genai_client
-from geap_tuning.rlft.tune import launch_rlft_job
-from geap_tuning.jobs import wait_for_tuning_job, tuned_endpoint
-from geap_tuning.rlft.evaluate import run_rlft_eval
-
-cfg = load_config()
-aiplatform.init(project=cfg.project, location=cfg.location, experiment="geap-rlft-math")
-client = genai_client(cfg)  # tuning stays regional
-
-with aiplatform.start_run("v1-adapter16"):
-    aiplatform.log_params({"base_model": "gemini-3.5-flash", "adapter_size": 16, "epochs": 5})
-    job = launch_rlft_job(
-        client,
-        train_uri=train_uri,
-        val_uri=val_uri,
-        display_name="geap-rlft-math-v1",
-        base_model="gemini-3.5-flash",
-    )
-    job = wait_for_tuning_job(client, job.name)
-    metrics = run_rlft_eval(
-        test_records, generate_fn=lambda u: generate(client, tuned_endpoint(job), u)
-    )
-    aiplatform.log_metrics({"held_out_accuracy": metrics["accuracy"], "n": metrics["n"]})
+init_experiment("geap-sft-checkpoint-eval", project=cfg.project, location=cfg.location)
+with track_run("v1-adapter16", params={"base_model": "gemini-2.5-flash", "adapter_size": 16}):
+    log_summary_metrics({"accuracy": metrics["accuracy"], "macro_f1": metrics["macro_f1"]})
 ```
 
-Each `start_run(...)` is one trackable run; `log_params`/`log_metrics` attach a
-key→value snapshot (summary metrics). Compare runs side by side in
-**console → Experiments**, or pull them programmatically with
-`aiplatform.Experiment("geap-rlft-math").get_data_frame()` (and per run,
-`run.get_params()` / `run.get_metrics()`). Longitudinal *time-series* metrics additionally
-require a Vertex AI TensorBoard instance. Experiment runs themselves incur no extra
-charge — you pay only for the tuning/eval resources they wrap.
+`init_experiment` selects the experiment context; each `track_run(...)` is one trackable run
+that logs its params on entry, and `log_summary_metrics` records one value per key. Read the
+runs back as a table with `experiment_dataframe("geap-sft-checkpoint-eval")` or compare them
+in **console → Experiments**. **Summary metrics need no TensorBoard**; longitudinal
+*time-series* curves (`log_timeseries_metrics`) additionally require a **Managed TensorBoard**
+instance (cost + provisioning), created/attached opt-in via `get_or_create_tensorboard(...)` +
+`init_experiment(..., tensorboard=...)`. Experiment runs themselves incur no extra charge —
+you pay only for the tuning/eval resources they wrap.
 
-See [`docs/notes/experiment-tracking.md`](docs/notes/experiment-tracking.md) for the full
-API surface, the automatic-vs-opt-in split, and gotchas.
+A complete worked example (reuses one SFT-with-checkpoints job, logs a run per checkpoint,
+optional `--tensorboard` time-series) is in
+[`examples/run_experiment_tracking.py`](examples/run_experiment_tracking.py) /
+[`notebooks/08_experiment_tracking.ipynb`](notebooks/08_experiment_tracking.ipynb). See
+[`docs/notes/experiment-tracking.md`](docs/notes/experiment-tracking.md) for the full API
+surface, the automatic-vs-opt-in split, and gotchas.
 
 ## Conventions
 
@@ -351,7 +336,7 @@ geap-tuning/
 │   ├── preference/              # preference tuning / DPO
 │   └── rlft/                    # reinforcement learning fine-tuning + reward builders
 ├── examples/                    # runnable run_*.py drivers (one per demo; live GCP + cost)
-├── notebooks/                   # thin 01–07 notebooks mirroring the examples
+├── notebooks/                   # thin 01–08 notebooks mirroring the examples
 ├── tests/                       # pytest suite — mocked clients, no live GCP
 │   ├── sft/
 │   ├── preference/
