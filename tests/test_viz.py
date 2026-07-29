@@ -71,6 +71,16 @@ def test_dataframe_to_rows_via_to_dict() -> None:
     assert frame.to_dict.call_args.kwargs["orient"] == "records"
 
 
+def test_normalize_experiment_rows_strips_prefixes() -> None:
+    raw = [
+        {"run_name": "r1", "metric.accuracy": 0.8, "param.epochs": 1, "extra": 9},
+        {"run_name": "r2", "metric.accuracy": 0.9, "param.epochs": 2, "extra": 8},
+    ]
+    rows = viz.normalize_experiment_rows(raw)
+    assert rows[0] == {"run": "r1", "accuracy": 0.8, "epochs": 1, "extra": 9}
+    assert rows[1]["run"] == "r2"
+
+
 # --- plots (rendering mocked) --------------------------------------------------
 
 

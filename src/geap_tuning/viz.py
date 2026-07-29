@@ -58,6 +58,33 @@ def dataframe_to_rows(frame: Any) -> list[dict[str, Any]]:  # noqa: ANN401 - pan
     return frame.to_dict(orient="records")
 
 
+def normalize_experiment_rows(
+    rows: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Rename Vertex Experiments columns into the shape the plot functions expect.
+
+    :func:`geap_tuning.experiments.experiment_dataframe` yields columns prefixed
+    ``metric.`` / ``param.`` plus a ``run_name`` column. This strips those
+    prefixes and renames ``run_name`` → ``run`` so a read-back dataframe plots
+    the same way as :func:`geap_tuning.doe.aggregate_results` rows. Unprefixed
+    keys pass through unchanged; on a name clash the later key wins.
+    """
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        out: dict[str, Any] = {}
+        for key, value in row.items():
+            if key == "run_name":
+                out["run"] = value
+            elif key.startswith("metric."):
+                out[key[len("metric.") :]] = value
+            elif key.startswith("param."):
+                out[key[len("param.") :]] = value
+            else:
+                out[key] = value
+        normalized.append(out)
+    return normalized
+
+
 def plot_metric_bars(
     rows: Sequence[Mapping[str, Any]],
     *,
