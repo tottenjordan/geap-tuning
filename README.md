@@ -15,7 +15,15 @@
 
 <p><em>Working, runnable examples of <b>Gemini Enterprise Agent Platform (GEAP)</b> model tuning services —<br><b>supervised fine-tuning (SFT)</b>, <b>preference tuning (DPO)</b>, and <b>reinforcement learning fine-tuning (RLFT)</b> —<br>built on the Google Gen AI SDK against the Vertex/Agent Platform backend.</em></p>
 
+<img src="docs/imgs/reference-architecture.png" alt="GEAP tuning reference architecture: the geap_tuning package stages JSONL datasets in Cloud Storage and launches a regional Vertex AI / GEAP tuning job (SFT, DPO, or RLFT) that returns a tuned model endpoint plus checkpoints and managed-evaluation results in GCS." width="100%">
+
 </div>
+
+The `geap_tuning` package (uv-managed, Google Gen AI SDK, **regional** client)
+stages JSONL datasets in a region-matched Cloud Storage bucket, then launches a
+Vertex AI / GEAP tuning job whose method is SFT, DPO, or RLFT. The job produces a
+**tuned model endpoint** plus per-epoch checkpoints and managed-evaluation results
+in GCS; the package's offline scorers and inference call the returned endpoint.
 
 ## Setup
 
@@ -41,6 +49,35 @@ make dev               # uv sync --all-groups
 | Run the RLFT example | `uv run python examples/run_rlft.py` (requires live GCP + incurs tuning cost) |
 | Run the checkpointing demo | `uv run python examples/run_checkpoints.py` (requires live GCP + incurs tuning cost) |
 | Run the continuous-tuning demo | `uv run python examples/run_continuous_tuning.py` (requires live GCP + incurs tuning cost) |
+| Run the RLFT reward-types tour | `uv run python examples/run_rlft_reward_types.py` (requires live GCP + incurs tuning cost) |
+| Run the advanced-evaluation demo | `uv run python examples/run_advanced_eval.py` (requires live GCP + incurs tuning cost) |
+
+## Workflow
+
+Every example follows the same end-to-end lifecycle — only the record shape,
+launcher, and reward/eval knobs change per method:
+
+![End-to-end GEAP tuning workflow: build JSONL, stage in Cloud Storage, optionally preflight an RLFT reward, launch a job with managed evaluation attached, evaluate each checkpoint, then score offline against the tuned endpoint; a continuous-tuning loop feeds the tuned model back as the base model.](docs/imgs/tuning-workflow.png)
+
+1. **Build the dataset** — JSONL records; the shape varies by method (SFT
+   `contents`, DPO `completions` + `score`, RLFT `references` + a reward function).
+2. **Stage in GCS** — `upload_file(...)` puts the train/val splits in the
+   region-matched bucket.
+3. **Preflight the reward** (RLFT only, free) — `validate_reward_config(...)`
+   scores one sample before spending on a job.
+4. **Launch the job** — a `launch_*_job(...)` wrapper around
+   `client.tunings.tune(...)`; attach an `evaluation_config` and keep
+   `export_last_checkpoint_only=False` so eval runs per checkpoint.
+5. **Tune + evaluate** — GEAP emits one checkpoint per epoch and (if configured)
+   evaluates each, writing results to GCS.
+6. **Resolve the endpoint** — `wait_for_tuning_job(...)` returns the tuned model
+   endpoint.
+7. **Score offline + infer** — the repo's scorers (accuracy / win-rate /
+   reward-accuracy) and `generate_content` call the endpoint.
+
+The **continuous-tuning** loop feeds a tuned model back as `base_model` (the demo
+chains **SFT → RLFT**), and **checkpoint reassignment** picks the best checkpoint
+as the model's default — see below.
 
 ## Checkpointing & continuous tuning
 
@@ -64,10 +101,37 @@ See [`docs/notes/checkpoints-and-continuous-tuning.md`](docs/notes/checkpoints-a
 for the verified SDK surface and gotchas (Gen AI SDK only; auto-eval
 `us-central1` only; base-model 2025-07-11 cutoff; tuning stays regional).
 
+## RLFT reward types
+
+RLFT scores each generation with a **reward function** over the record's
+`references` — the scorer shape decides *how*. All four SDK scorers have builders
+in [`rlft/tune.py`](src/geap_tuning/rlft/tune.py), toured by
+`examples/run_rlft_reward_types.py` +
+[`notebooks/06_rlft_reward_types.ipynb`](notebooks/06_rlft_reward_types.ipynb):
+
+![RLFT reward-scorer types: code-execution, string-match, autorater, and cloud-run (documented-only) scorers combine through build_composite_reward_config into a weighted composite reward; validate_reward preflights any scorer for free before launch.](docs/imgs/rlft-reward-types.png)
+
+- **code-execution** (`build_reward_config`) — verifiable correctness; ships
+  tested Python via `inspect.getsource` (the default reward).
+- **string-match** (`build_string_match_reward_config`) — cheap, declarative
+  format/keyword reward; no gold answer, no sandbox.
+- **autorater** (`build_autorater_reward_config`) — an LLM judge scores subjective
+  quality.
+- **cloud-run** (`build_cloud_run_reward_config`) — external service; **documented
+  builder only** (needs a deployed endpoint).
+
+`build_composite_reward_config([(cfg, weight), ...])` combines several into a
+weighted reward (e.g. code-exec 0.8 + autorater 0.2); pass it to `launch_rlft_job`
+/ `validate_reward_config` as `composite_reward_config=` (mutually exclusive with
+the single `reward_config`). Preflight any reward with `validate_reward_config`
+before spending on a job.
+
 ## Evaluation
 
 GEAP exposes a managed **Gen AI Evaluation service**, and this repo pairs it with
 its own **offline** scoring. They answer different questions — use both:
+
+![Two evaluation paths: managed GEAP evaluation runs inside the tuning job (EvaluationConfig, per-checkpoint, multi-metric, results written to GCS, us-central1 Preview) while the repo's offline scorers run locally against the tuned endpoint and return a Python dict (SFT accuracy, DPO win-rate, RLFT reward-accuracy).](docs/imgs/evaluation.png)
 
 | | GEAP Evaluation service (managed) | Offline `evaluate.py` (this repo) |
 |---|---|---|
@@ -101,8 +165,8 @@ job = launch_sft_job(
     train_uri=train_uri,
     val_uri=val_uri,
     display_name="geap-sft-support-intent",
-    evaluation_config=eval_config,     # <- runs after each checkpoint
-    export_last_checkpoint_only=False, # keep checkpoints so each gets evaluated
+    evaluation_config=eval_config,  # <- runs after each checkpoint
+    export_last_checkpoint_only=False,  # keep checkpoints so each gets evaluated
 )
 ```
 
@@ -110,24 +174,42 @@ Under the hood `build_evaluation_config` assembles the SDK types:
 
 ```python
 types.EvaluationConfig(
-    metrics=[types.Metric(name="FLUENCY", prompt_template="Evaluate the fluency of this response: {prediction}")],
+    metrics=[
+        types.Metric(
+            name="FLUENCY", prompt_template="Evaluate the fluency of this response: {prediction}"
+        )
+    ],
     output_config=types.OutputConfig(
         gcs_destination=types.GcsDestination(output_uri_prefix="gs://<bucket>/sft_eval"),
     ),
 )
 ```
 
-- **Metrics** — each `types.Metric` is either an LLM-as-judge metric (supply a
-  `prompt_template`, optional `judge_model_system_instruction`) or a computation
-  metric (`custom_function`). Pass your own list to `build_evaluation_config(...,
-  metrics=[...])`; the default is a single pointwise fluency metric as a starting
-  point. **Verify metric names/templates against the live eval catalog before a
-  real run** — the catalog evolves, and the SDK lowercases `Metric.name`.
-- **Autorater** — `EvaluationConfig.autorater_config` (`types.AutoraterConfig`)
-  tunes the judge: `autorater_model`, `sampling_count`, `flip_enabled` (mitigates
-  position bias), `generation_config`.
-- **Cadence** — the launcher evaluates each checkpoint; `CreateTuningJobConfig`
-  also exposes `evaluate_interval` for step-based cadence if you thread it through.
+- **Metrics** — mix three kinds, each with a builder in
+  [`autoeval.py`](src/geap_tuning/autoeval.py) (see the comprehensive
+  [`run_advanced_eval.py`](examples/run_advanced_eval.py) /
+  [`07_advanced_eval`](notebooks/07_advanced_eval.ipynb)):
+  - `llm_judge_metric(name, prompt_template, judge_model_system_instruction=)` —
+    LLM-as-judge (`types.Metric`). **SDK lowercases `name`.**
+  - `computation_metric(metric_type)` — deterministic `EXACT_MATCH`/`BLEU`/`ROUGE`
+    (`types.UnifiedMetric`; no `name` field — the spec identifies it).
+  - `predefined_metric(metric_spec_name)` — a managed catalog metric by name
+    (e.g. `text_quality_v1`). **Verify names against the live catalog first.**
+
+  Pass your own list to `build_evaluation_config(..., metrics=[...])`; the default
+  is a single pointwise fluency metric as a starting point.
+- **Autorater** — `build_autorater_config(sampling_count=, flip_enabled=,
+  autorater_model=)` → `EvaluationConfig.autorater_config` tunes the shared judge
+  (`flip_enabled` mitigates pairwise position bias).
+- **Inference config** — `build_evaluation_config(..., inference_generation_config=
+  types.GenerationConfig(temperature=0.0))` controls how the *tuned model*
+  generates the responses being scored (deterministic → comparable across
+  checkpoints).
+- **Cadence** — SFT/DPO evaluate per exported checkpoint (cadence follows
+  checkpointing). `evaluate_interval` (int) for explicit step-based cadence is
+  **RLFT-only** in google-genai 2.14.0 — the SDK serializes it under the
+  reinforcement spec, so it 400s on SFT/DPO jobs; it is threaded through
+  `launch_rlft_job` only. See [docs/notes/tuning-apis.md](docs/notes/tuning-apis.md).
 - **Results** — land under `output_uri_prefix` in Cloud Storage; view them there
   or in **Agent Platform Studio → Tune and Distill → _your tuned model_**.
 
@@ -221,3 +303,34 @@ API surface, the automatic-vs-opt-in split, and gotchas.
 ## Conventions
 
 Read [CODE_STANDARDS.md](CODE_STANDARDS.md) before writing code or changing the environment. Session notes live in [`docs/notes/`](docs/notes/README.md); guidance for AI agents is in [CLAUDE.md](CLAUDE.md).
+
+## Repo structure
+
+```text
+geap-tuning/
+├── src/geap_tuning/             # the package — shared helpers: config, gcs, jobs,
+│   │                            #   autoeval, inference, schemas
+│   ├── sft/                     # supervised fine-tuning (data, tune, evaluate)
+│   ├── preference/              # preference tuning / DPO
+│   └── rlft/                    # reinforcement learning fine-tuning + reward builders
+├── examples/                    # runnable run_*.py drivers (one per demo; live GCP + cost)
+├── notebooks/                   # thin 01–07 notebooks mirroring the examples
+├── tests/                       # pytest suite — mocked clients, no live GCP
+│   ├── sft/
+│   ├── preference/
+│   └── rlft/
+├── datasets/                    # JSONL datasets (gitignored; a sample.jsonl is committed)
+│   ├── sft_support_intent/
+│   ├── preference_support_style/
+│   ├── rlft_math/
+│   └── math_sft/
+├── docs/
+│   ├── notes/                   # durable session notes (indexed by notes/README.md)
+│   └── imgs/                    # reference-architecture + workflow diagrams
+├── scripts/                     # bootstrap_gcp.sh — enable APIs + create the region bucket
+├── CLAUDE.md                    # guidance for AI agents
+├── CODE_STANDARDS.md            # uv / ruff / ty / pytest non-negotiables
+├── Makefile                     # dev · lint · format · test
+├── pyproject.toml               # dependencies + tool config
+└── uv.lock                      # pinned dependency lockfile
+```

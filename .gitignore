@@ -23,3 +23,6 @@ datasets/**/*.jsonl
 
 # Editors / OS
 .DS_Store
+
+# PaperBanana MCP diagram scratch runs (final images are copied into docs/imgs/)
+outputs/

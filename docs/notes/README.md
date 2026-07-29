@@ -5,10 +5,14 @@ Curated links to durable notes for this repo. Keep this file **under 200 lines**
 ## Topics
 
 - [GEAP tuning overview](geap-tuning-overview.md) — tuning methods, supported models, SDK paths, job→endpoint flow.
-- [Tuning APIs](tuning-apis.md) — per-service call shapes, JSONL schemas (SFT/DPO/RLFT), hyperparameters, Pre-GA caveats.
+- [Tuning APIs](tuning-apis.md) — per-service call shapes, JSONL schemas (SFT/DPO/RLFT), the four RLFT reward scorers + composite, managed-evaluation config (metric kinds, autorater, `evaluate_interval`), hyperparameters, Pre-GA caveats.
 - [Checkpointing & continuous tuning](checkpoints-and-continuous-tuning.md) — `export_last_checkpoint_only`, per-checkpoint endpoints, default-checkpoint reassignment, SFT→RLFT chain.
 - [Environment & config](environment.md) — `.env` var groups, redundant aliases, region/bucket gotchas, auth.
 - [Toolchain & standards](toolchain.md) — uv/ruff/ty/pytest setup, ruff `ALL` ignores, non-obvious config decisions.
 - [Experiment tracking](experiment-tracking.md) — automatic tuning-metric curves vs. opt-in Vertex AI Experiments; the `val_uri`→`/eval_*` link.
+
+## Diagrams
+
+Reference-architecture and workflow diagrams live in [`docs/imgs/`](../imgs/) and are embedded in the [README](../../README.md) and the notes above: `reference-architecture.png`, `tuning-workflow.png`, `rlft-reward-types.png`, `evaluation.png`. Regenerate them with the PaperBanana MCP tool from the source contexts in the README sections they illustrate.
 
 <!-- Add one line per new note: - [Title](file.md) — hook -->

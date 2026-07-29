@@ -52,7 +52,9 @@ def launch_preference_job(  # noqa: PLR0913 - explicit tuning hyperparameters, a
     ``pre_tuned_model_checkpoint_id`` behave as in :func:`launch_sft_job` — the
     documented DPO best practice is to SFT first, then continuous-tune from that
     SFT model by passing its resource name as ``base_model`` (see
-    ``docs/notes/checkpoints-and-continuous-tuning.md``).
+    ``docs/notes/checkpoints-and-continuous-tuning.md``). Like SFT, DPO has **no**
+    ``evaluate_interval`` — that field is RLFT-only in google-genai 2.14.0 (it
+    serializes under the reinforcement spec, so passing it here 400s).
     """
     config = types.CreateTuningJobConfig(
         method="PREFERENCE_TUNING",

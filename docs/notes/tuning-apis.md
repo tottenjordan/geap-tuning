@@ -105,10 +105,30 @@ Record shape — `contents` ends on a **user** turn; ground truth lives in
 }
 ```
 
+![RLFT reward-scorer types and composite reward](../imgs/rlft-reward-types.png)
+
 - **Reward scorers** — one of four on `SingleReinforcementTuningRewardConfig`
-  (`reward_name` + a scorer): `string_match_reward_scorer`, `autorater_scorer`,
-  **`code_execution_reward_scorer`** (used here), or `cloud_run_reward_scorer`.
-  `CompositeReinforcementTuningRewardConfig` combines several.
+  (`reward_name` + exactly one scorer). All four have builders in `rlft/tune.py`
+  (`build_*_reward_config`); demoed by `examples/run_rlft_reward_types.py` /
+  `06_rlft_reward_types`:
+  - `code_execution_reward_scorer` (`python_code_snippet`) — verifiable
+    correctness; ships `rlft/reward.py` verbatim (the default).
+  - `string_match_reward_scorer` (`correct_answer_reward`, `wrong_answer_reward`,
+    `string_match_expression{match_operation: MatchOperation[REGEX_CONTAINS|
+    PARTIAL_MATCH|EXACT_MATCH], expression}`; alt. `json_match_expression{key_name,
+    value_string_match_expression}` to match a `references` key) — cheap,
+    declarative format/keyword reward, no gold, no sandbox.
+  - `autorater_scorer` (`autorater_config: AutoraterConfig`, `autorater_prompt`,
+    `autorater_response_parse_config{parse_type: ResponseParseType[IDENTITY|
+    REGEX_EXTRACT], regex_extract_expression}`, and one of
+    `exact_match_scorer{correct_answer_reward, wrong_answer_reward, expression}` /
+    `parsed_response_conversion_scorer`) — LLM judge for subjective quality.
+  - `cloud_run_reward_scorer` (`cloud_run_uri`) — external service; **documented
+    builder only** here (needs a deployed endpoint).
+  - `CompositeReinforcementTuningRewardConfig.weighted_reward_configs` — list of
+    `…WeightedRewardConfig{reward_config: SingleReinforcementTuningRewardConfig,
+    weight: float}`; the reward is the weighted sum (e.g. code-exec 0.8 +
+    autorater 0.2).
 - **Code-execution contract** — the sandbox runs `python_code_snippet`, then calls
   `evaluate(example, response) -> float` with **camelCase ProtoJSON** dicts
   (`example` carries `references`/`systemInstruction`; `response` is a `Content`
@@ -118,8 +138,10 @@ Record shape — `contents` ends on a **user** turn; ground truth lives in
   ships `rlft/reward.py` verbatim via `inspect.getsource` — one tested function
   used both as the training reward and for offline eval.
 - **Preflight** — `client.tunings.validate_reward(parent, sample_response, example,
-  single_reward_config=...)` scores one example before launch; a non-null `error`
-  or `NaN` means the reward is broken (`rlft/tune.py:validate_reward_config`).
+  single_reward_config=... | composite_reward_config=...)` scores one example
+  before launch; a non-null `error` or `NaN` means the reward is broken. Both
+  `launch_rlft_job` and `validate_reward_config` accept a mutually-exclusive
+  `composite_reward_config=` (`rlft/tune.py`).
 - **Hyperparameters** — `samples_per_prompt` (candidate generations per prompt for
   reward comparison), plus `epoch_count`, `adapter_size`, `learning_rate_multiplier`,
   `validation_dataset` as with SFT; `thinking_level` (`HIGH`/`MINIMAL`).
@@ -155,6 +177,53 @@ tuned-model resource name as `base_model` and the SDK treats it as pre-tuned.
 Full verified surface + gotchas (auto-eval `us-central1` only, 2025-07-11
 base-model cutoff, Gen AI SDK only) in
 [[checkpoints-and-continuous-tuning]].
+
+## Managed evaluation (cross-cutting, implemented)
+
+Reached **only via `CreateTuningJobConfig.evaluation_config`** — there is no
+standalone `client.evals` in google-genai 2.14.0. GEAP evaluates each checkpoint
+and writes results to GCS. Builders in `autoeval.py`; demoed by
+`examples/run_advanced_eval.py` / `07_advanced_eval`.
+
+![Managed GEAP evaluation vs. the repo's offline scorers](../imgs/evaluation.png)
+
+The managed service (left) and the repo's offline scorers (right) answer
+different questions and are used together — see the comparison in
+[README → Evaluation](../../README.md#evaluation).
+
+- **`EvaluationConfig`** fields: `metrics`, `output_config`, `autorater_config`,
+  `inference_generation_config`.
+- **Metric kinds:**
+  - LLM-judge — `types.Metric(name, prompt_template,
+    judge_model_system_instruction)` (`llm_judge_metric`). **SDK lowercases
+    `name`.**
+  - Computation — `types.UnifiedMetric(computation_based_metric_spec=
+    ComputationBasedMetricSpec(type: ComputationBasedMetricType[EXACT_MATCH|BLEU|
+    ROUGE]))` (`computation_metric`). `UnifiedMetric` has **no `name` field** —
+    the spec identifies it.
+  - Predefined catalog — `types.UnifiedMetric(predefined_metric_spec=
+    PredefinedMetricSpec(metric_spec_name))` (`predefined_metric`); names
+    (e.g. `text_quality_v1`) must exist in the live catalog — verify first.
+- **`AutoraterConfig`** (`build_autorater_config`): `sampling_count` (1–32),
+  `flip_enabled` (pairwise position-bias), `autorater_model`, `generation_config`
+  — tunes the shared judge for LLM-judge metrics.
+- **`inference_generation_config`** — a `types.GenerationConfig` controlling how
+  the *tuned model* generates the responses being scored (e.g. `temperature=0.0`).
+- **`evaluate_interval`** (`CreateTuningJobConfig`, int) — step cadence for eval
+  runs. **RLFT-only in google-genai 2.14.0** (threaded through `launch_rlft_job`
+  only): the SDK's `_CreateTuningJobConfig_to_vertex` serializes it
+  *unconditionally* under `reinforcementTuningSpec.hyperParameters.evaluateInterval`
+  (`tunings.py` line ~804, **not** inside the per-`method` branch that guards
+  `epoch_count`/`evaluation_config`). So setting it on an SFT/DPO job adds a
+  `reinforcementTuningSpec` alongside the supervised/preference spec and the API
+  400s (`oneof field 'tuning_spec' is already set. Cannot set
+  'reinforcementTuningSpec'`). The SFT/DPO launchers therefore omit it; SFT/DPO
+  eval cadence just follows checkpointing. (`evaluation_config` itself *is*
+  method-branched — `supervisedTuningSpec.evaluationConfig` etc. — so managed eval
+  works on all methods; only `evaluate_interval` is mis-mapped.) Discovered by a
+  live `run_advanced_eval.py` run — unit tests missed it because they assert on the
+  Python config object, never serializing through the converter.
+- **Region:** Preview, `us-central1` only.
 
 ## Pre-GA / drift caveats
 

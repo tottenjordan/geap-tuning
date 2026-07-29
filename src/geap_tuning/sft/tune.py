@@ -58,6 +58,13 @@ def launch_sft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all keyw
     (``projects/.../models/id@ver``) as ``base_model`` — the SDK auto-detects it
     as a pre-tuned model — and optionally pin a source checkpoint with
     ``pre_tuned_model_checkpoint_id``.
+
+    NOTE: there is intentionally **no** ``evaluate_interval`` here. In
+    google-genai 2.14.0 that field serializes only under the reinforcement spec
+    (``reinforcementTuningSpec.hyperParameters.evaluateInterval``), so passing it
+    on an SFT job makes the request set two ``tuning_spec`` oneof members and the
+    API rejects it (400 ``INVALID_ARGUMENT``). ``evaluate_interval`` is therefore
+    RLFT-only — see :func:`geap_tuning.rlft.tune.launch_rlft_job`.
     """
     config = types.CreateTuningJobConfig(
         tuned_model_display_name=display_name,
