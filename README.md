@@ -53,6 +53,43 @@ make dev               # uv sync --all-groups
 | Run the RLFT reward-types tour | `uv run python examples/run_rlft_reward_types.py` (requires live GCP + incurs tuning cost) |
 | Run the advanced-evaluation demo | `uv run python examples/run_advanced_eval.py` (requires live GCP + incurs tuning cost) |
 
+## Tuning services
+
+GEAP exposes **three tuning methods** through the same `client.tunings.tune(...)`
+call; they differ by *what they learn from*, and this repo implements one worked
+example each. Checkpointing and continuous tuning layer on top of all three (they
+are not separate services — see [Checkpointing & continuous tuning](#checkpointing--continuous-tuning)).
+
+| Service | Learns from | Reach for it when… | Dataset record | Supported models | Example |
+|---|---|---|---|---|---|
+| **SFT** | labeled input→output examples | you can *demonstrate* the desired output (classification, extraction, summarization, domain queries); required for code models | gold `model` turn inside `contents` | 3.5 Flash · 3.1 Flash-Lite · 2.5 Pro · 2.5 Flash · 2.5 Flash-Lite | [`run_sft.py`](examples/run_sft.py) · [`01`](notebooks/01_sft.ipynb) |
+| **DPO** (preference) | preference pairs (chosen vs rejected) | quality/style is *subjective* and hard to label; best after an SFT pass | `completions` — two candidates, `score` 1/0 | 2.5 Flash · 2.5 Flash-Lite only | [`run_preference.py`](examples/run_preference.py) · [`02`](notebooks/02_preference_tuning.ipynb) |
+| **RLFT** | a programmable **reward** over generations | correctness/format/judge-score can be *scored* but not imitated (no single gold answer) | `references` (ground-truth map); **no** target completion | Pre-GA (`v1beta1`); docs recommend `gemini-3.5-flash` | [`run_rlft.py`](examples/run_rlft.py) · [`03`](notebooks/03_rlft.ipynb) |
+
+- **Supervised fine-tuning (SFT)** teaches a new skill by imitating labeled
+  `contents` (a user prompt plus a gold `model` turn). It's the go-to for
+  well-defined tasks like classification, entity extraction, and summarization —
+  and the *only* option for code models. The repo tunes `gemini-2.5-flash` and
+  scores held-out **accuracy**.
+- **Preference tuning (DPO)** learns *how* to answer from `completions` pairs
+  scored preferred (`1`) / dispreferred (`0`) — use it for subjective style or
+  quality that's hard to capture with a single label, ideally continuing from an
+  SFT checkpoint (see [Checkpointing & continuous tuning](#checkpointing--continuous-tuning)).
+  The repo passes `method="PREFERENCE_TUNING"` with a `beta` strength knob and
+  scores **win-rate**; only Gemini 2.5 Flash / Flash-Lite support it.
+- **Reinforcement learning fine-tuning (RLFT)** trains against a programmable
+  reward over a `references` dataset with **no** target completion — reach for it
+  when an objective can be *scored* (correctness, format, an LLM judge) rather
+  than demonstrated. The repo passes `method="REINFORCEMENT_TUNING"` with a
+  code-execution reward by default and scores **reward-accuracy**; the four
+  reward-scorer types are toured in [RLFT reward types](#rlft-reward-types).
+  RLFT is Pre-GA.
+
+For exact call shapes, dataset JSONL schemas, and per-service hyperparameters see
+[`docs/notes/tuning-apis.md`](docs/notes/tuning-apis.md) (`## Service matrix`);
+for the full supported-model lists and the two-SDK-path choice see
+[`docs/notes/geap-tuning-overview.md`](docs/notes/geap-tuning-overview.md).
+
 ## Workflow
 
 Every example follows the same end-to-end lifecycle — only the record shape,
@@ -279,50 +316,35 @@ job are needed; the metrics appear once the job starts running.
 
 To compare *multiple* tuning runs — a hyperparameter sweep over `adapter_size`, `epochs`,
 `learning_rate_multiplier`, or (RLFT) `samples_per_prompt` — and to record your own offline
-eval numbers (e.g. the held-out accuracy from `run_rlft_eval`) alongside each run, wrap the
-launch in a **Vertex AI Experiment**. This lives on the `google-cloud-aiplatform` SDK (already
-a dependency), *complementing* the `google.genai` tuning call — Experiments is orchestration
-around the job, so mixing the two SDKs here is intentional, not a violation of the
-"one SDK path per example" rule (see [CLAUDE.md](CLAUDE.md)).
+eval numbers (e.g. the held-out accuracy from `run_eval`) alongside each run, log to a
+**Vertex AI Experiment** via the [`experiments`](src/geap_tuning/experiments.py) helper. It
+wraps `google-cloud-aiplatform` (already a dependency), *complementing* the `google.genai`
+tuning call — Experiments is orchestration around the job, so mixing the two SDKs here is
+intentional, not a violation of the "one SDK path per example" rule (see [CLAUDE.md](CLAUDE.md)).
 
 ```python
-from google.cloud import aiplatform
+from geap_tuning.experiments import init_experiment, track_run, log_summary_metrics
 
-from geap_tuning.config import load_config, genai_client
-from geap_tuning.rlft.tune import launch_rlft_job
-from geap_tuning.jobs import wait_for_tuning_job, tuned_endpoint
-from geap_tuning.rlft.evaluate import run_rlft_eval
-
-cfg = load_config()
-aiplatform.init(project=cfg.project, location=cfg.location, experiment="geap-rlft-math")
-client = genai_client(cfg)  # tuning stays regional
-
-with aiplatform.start_run("v1-adapter16"):
-    aiplatform.log_params({"base_model": "gemini-3.5-flash", "adapter_size": 16, "epochs": 5})
-    job = launch_rlft_job(
-        client,
-        train_uri=train_uri,
-        val_uri=val_uri,
-        display_name="geap-rlft-math-v1",
-        base_model="gemini-3.5-flash",
-    )
-    job = wait_for_tuning_job(client, job.name)
-    metrics = run_rlft_eval(
-        test_records, generate_fn=lambda u: generate(client, tuned_endpoint(job), u)
-    )
-    aiplatform.log_metrics({"held_out_accuracy": metrics["accuracy"], "n": metrics["n"]})
+init_experiment("geap-sft-checkpoint-eval", project=cfg.project, location=cfg.location)
+with track_run("v1-adapter16", params={"base_model": "gemini-2.5-flash", "adapter_size": 16}):
+    log_summary_metrics({"accuracy": metrics["accuracy"], "macro_f1": metrics["macro_f1"]})
 ```
 
-Each `start_run(...)` is one trackable run; `log_params`/`log_metrics` attach a
-key→value snapshot (summary metrics). Compare runs side by side in
-**console → Experiments**, or pull them programmatically with
-`aiplatform.Experiment("geap-rlft-math").get_data_frame()` (and per run,
-`run.get_params()` / `run.get_metrics()`). Longitudinal *time-series* metrics additionally
-require a Vertex AI TensorBoard instance. Experiment runs themselves incur no extra
-charge — you pay only for the tuning/eval resources they wrap.
+`init_experiment` selects the experiment context; each `track_run(...)` is one trackable run
+that logs its params on entry, and `log_summary_metrics` records one value per key. Read the
+runs back as a table with `experiment_dataframe("geap-sft-checkpoint-eval")` or compare them
+in **console → Experiments**. **Summary metrics need no TensorBoard**; longitudinal
+*time-series* curves (`log_timeseries_metrics`) additionally require a **Managed TensorBoard**
+instance (cost + provisioning), created/attached opt-in via `get_or_create_tensorboard(...)` +
+`init_experiment(..., tensorboard=...)`. Experiment runs themselves incur no extra charge —
+you pay only for the tuning/eval resources they wrap.
 
-See [`docs/notes/experiment-tracking.md`](docs/notes/experiment-tracking.md) for the full
-API surface, the automatic-vs-opt-in split, and gotchas.
+A complete worked example (reuses one SFT-with-checkpoints job, logs a run per checkpoint,
+optional `--tensorboard` time-series) is in
+[`examples/run_experiment_tracking.py`](examples/run_experiment_tracking.py) /
+[`notebooks/08_experiment_tracking.ipynb`](notebooks/08_experiment_tracking.ipynb). See
+[`docs/notes/experiment-tracking.md`](docs/notes/experiment-tracking.md) for the full API
+surface, the automatic-vs-opt-in split, and gotchas.
 
 ## Conventions
 
