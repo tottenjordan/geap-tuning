@@ -303,3 +303,34 @@ API surface, the automatic-vs-opt-in split, and gotchas.
 ## Conventions
 
 Read [CODE_STANDARDS.md](CODE_STANDARDS.md) before writing code or changing the environment. Session notes live in [`docs/notes/`](docs/notes/README.md); guidance for AI agents is in [CLAUDE.md](CLAUDE.md).
+
+## Repo structure
+
+```text
+geap-tuning/
+├── src/geap_tuning/             # the package — shared helpers: config, gcs, jobs,
+│   │                            #   autoeval, inference, schemas
+│   ├── sft/                     # supervised fine-tuning (data, tune, evaluate)
+│   ├── preference/              # preference tuning / DPO
+│   └── rlft/                    # reinforcement learning fine-tuning + reward builders
+├── examples/                    # runnable run_*.py drivers (one per demo; live GCP + cost)
+├── notebooks/                   # thin 01–07 notebooks mirroring the examples
+├── tests/                       # pytest suite — mocked clients, no live GCP
+│   ├── sft/
+│   ├── preference/
+│   └── rlft/
+├── datasets/                    # JSONL datasets (gitignored; a sample.jsonl is committed)
+│   ├── sft_support_intent/
+│   ├── preference_support_style/
+│   ├── rlft_math/
+│   └── math_sft/
+├── docs/
+│   ├── notes/                   # durable session notes (indexed by notes/README.md)
+│   └── imgs/                    # reference-architecture + workflow diagrams
+├── scripts/                     # bootstrap_gcp.sh — enable APIs + create the region bucket
+├── CLAUDE.md                    # guidance for AI agents
+├── CODE_STANDARDS.md            # uv / ruff / ty / pytest non-negotiables
+├── Makefile                     # dev · lint · format · test
+├── pyproject.toml               # dependencies + tool config
+└── uv.lock                      # pinned dependency lockfile
+```
