@@ -52,6 +52,43 @@ make dev               # uv sync --all-groups
 | Run the RLFT reward-types tour | `uv run python examples/run_rlft_reward_types.py` (requires live GCP + incurs tuning cost) |
 | Run the advanced-evaluation demo | `uv run python examples/run_advanced_eval.py` (requires live GCP + incurs tuning cost) |
 
+## Tuning services
+
+GEAP exposes **three tuning methods** through the same `client.tunings.tune(...)`
+call; they differ by *what they learn from*, and this repo implements one worked
+example each. Checkpointing and continuous tuning layer on top of all three (they
+are not separate services — see [Checkpointing & continuous tuning](#checkpointing--continuous-tuning)).
+
+| Service | Learns from | Reach for it when… | Dataset record | Supported models | Example |
+|---|---|---|---|---|---|
+| **SFT** | labeled input→output examples | you can *demonstrate* the desired output (classification, extraction, summarization, domain queries); required for code models | gold `model` turn inside `contents` | 3.5 Flash · 3.1 Flash-Lite · 2.5 Pro · 2.5 Flash · 2.5 Flash-Lite | [`run_sft.py`](examples/run_sft.py) · [`01`](notebooks/01_sft.ipynb) |
+| **DPO** (preference) | preference pairs (chosen vs rejected) | quality/style is *subjective* and hard to label; best after an SFT pass | `completions` — two candidates, `score` 1/0 | 2.5 Flash · 2.5 Flash-Lite only | [`run_preference.py`](examples/run_preference.py) · [`02`](notebooks/02_preference_tuning.ipynb) |
+| **RLFT** | a programmable **reward** over generations | correctness/format/judge-score can be *scored* but not imitated (no single gold answer) | `references` (ground-truth map); **no** target completion | Pre-GA (`v1beta1`); docs recommend `gemini-3.5-flash` | [`run_rlft.py`](examples/run_rlft.py) · [`03`](notebooks/03_rlft.ipynb) |
+
+- **Supervised fine-tuning (SFT)** teaches a new skill by imitating labeled
+  `contents` (a user prompt plus a gold `model` turn). It's the go-to for
+  well-defined tasks like classification, entity extraction, and summarization —
+  and the *only* option for code models. The repo tunes `gemini-2.5-flash` and
+  scores held-out **accuracy**.
+- **Preference tuning (DPO)** learns *how* to answer from `completions` pairs
+  scored preferred (`1`) / dispreferred (`0`) — use it for subjective style or
+  quality that's hard to capture with a single label, ideally continuing from an
+  SFT checkpoint (see [Checkpointing & continuous tuning](#checkpointing--continuous-tuning)).
+  The repo passes `method="PREFERENCE_TUNING"` with a `beta` strength knob and
+  scores **win-rate**; only Gemini 2.5 Flash / Flash-Lite support it.
+- **Reinforcement learning fine-tuning (RLFT)** trains against a programmable
+  reward over a `references` dataset with **no** target completion — reach for it
+  when an objective can be *scored* (correctness, format, an LLM judge) rather
+  than demonstrated. The repo passes `method="REINFORCEMENT_TUNING"` with a
+  code-execution reward by default and scores **reward-accuracy**; the four
+  reward-scorer types are toured in [RLFT reward types](#rlft-reward-types).
+  RLFT is Pre-GA.
+
+For exact call shapes, dataset JSONL schemas, and per-service hyperparameters see
+[`docs/notes/tuning-apis.md`](docs/notes/tuning-apis.md) (`## Service matrix`);
+for the full supported-model lists and the two-SDK-path choice see
+[`docs/notes/geap-tuning-overview.md`](docs/notes/geap-tuning-overview.md).
+
 ## Workflow
 
 Every example follows the same end-to-end lifecycle — only the record shape,
