@@ -22,7 +22,12 @@ inference knobs:
 - **Autorater config** — tunes the shared judge model (``sampling_count`` etc.).
 - **Inference generation config** — how the *tuned model* generates the responses
   being scored (``temperature=0.0`` for deterministic eval).
-- **evaluate_interval** — step cadence for the eval runs.
+
+GEAP evaluates each exported checkpoint, so eval cadence follows checkpointing
+(keep ``export_last_checkpoint_only=False``). NOTE: there is **no**
+``evaluate_interval`` here — in google-genai 2.14.0 that field serializes only
+under the reinforcement spec, so passing it on an SFT job 400s; it is RLFT-only
+(see ``run_rlft_reward_types.py``).
 
 NOTE: the eval service is **Preview and available in ``us-central1`` only**; the
 SDK **lowercases** ``Metric.name``; and predefined metric names must exist in the
@@ -57,7 +62,6 @@ DATA_DIR = Path("datasets/sft_support_intent")
 GCS_PREFIX = "sft_support_intent"
 EVAL_PREFIX = "advanced_eval"
 EVAL_REGION = "us-central1"  # the managed eval service is us-central1-only (Preview)
-EVALUATE_INTERVAL = 20  # run eval every N steps
 
 
 def build_advanced_eval_config(bucket: str) -> types.EvaluationConfig:
@@ -113,7 +117,6 @@ def main() -> None:
             val_uri=val_uri,
             display_name=DISPLAY_NAME,
             evaluation_config=eval_config,
-            evaluate_interval=EVALUATE_INTERVAL,
         )
         print(f"Launched tuning job with managed eval: {job.name}")
     else:

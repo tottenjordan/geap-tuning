@@ -203,14 +203,15 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
     base model — verify availability in your region before running live. Does not
     wait — poll with :func:`geap_tuning.jobs.wait_for_tuning_job`.
 
-    ``export_last_checkpoint_only``, ``evaluation_config``,
-    ``evaluate_interval`` and ``pre_tuned_model_checkpoint_id`` behave as in
-    :func:`launch_sft_job` (``evaluate_interval`` sets the step cadence for
-    ``evaluation_config`` eval runs); the
+    ``export_last_checkpoint_only``, ``evaluation_config`` and
+    ``pre_tuned_model_checkpoint_id`` behave as in :func:`launch_sft_job`; the
     documented best practice is SFT first, then continuous-tune with RLFT by
     passing the SFT model's resource name as ``base_model``.
-    ``checkpoint_interval`` (reinforcement-tuning only) sets how many steps
-    elapse between exported checkpoints. See
+    ``evaluate_interval`` sets the step cadence for ``evaluation_config`` eval
+    runs and ``checkpoint_interval`` sets how many steps elapse between exported
+    checkpoints — **both are reinforcement-tuning only** in google-genai 2.14.0
+    (the SDK serializes them under ``reinforcementTuningSpec``, so the SFT/DPO
+    launchers deliberately omit ``evaluate_interval``). See
     ``docs/notes/checkpoints-and-continuous-tuning.md``.
 
     ``reward_config`` and ``composite_reward_config`` are mutually exclusive: pass

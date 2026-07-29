@@ -202,8 +202,19 @@ and writes results to GCS. Builders in `autoeval.py`; demoed by
 - **`inference_generation_config`** — a `types.GenerationConfig` controlling how
   the *tuned model* generates the responses being scored (e.g. `temperature=0.0`).
 - **`evaluate_interval`** (`CreateTuningJobConfig`, int) — step cadence for eval
-  runs; threaded through all three launchers (`sft`/`preference`/`rlft`), pairs
-  with `evaluation_config`.
+  runs. **RLFT-only in google-genai 2.14.0** (threaded through `launch_rlft_job`
+  only): the SDK's `_CreateTuningJobConfig_to_vertex` serializes it
+  *unconditionally* under `reinforcementTuningSpec.hyperParameters.evaluateInterval`
+  (`tunings.py` line ~804, **not** inside the per-`method` branch that guards
+  `epoch_count`/`evaluation_config`). So setting it on an SFT/DPO job adds a
+  `reinforcementTuningSpec` alongside the supervised/preference spec and the API
+  400s (`oneof field 'tuning_spec' is already set. Cannot set
+  'reinforcementTuningSpec'`). The SFT/DPO launchers therefore omit it; SFT/DPO
+  eval cadence just follows checkpointing. (`evaluation_config` itself *is*
+  method-branched — `supervisedTuningSpec.evaluationConfig` etc. — so managed eval
+  works on all methods; only `evaluate_interval` is mis-mapped.) Discovered by a
+  live `run_advanced_eval.py` run — unit tests missed it because they assert on the
+  Python config object, never serializing through the converter.
 - **Region:** Preview, `us-central1` only.
 
 ## Pre-GA / drift caveats

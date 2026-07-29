@@ -166,8 +166,11 @@ types.EvaluationConfig(
   types.GenerationConfig(temperature=0.0))` controls how the *tuned model*
   generates the responses being scored (deterministic → comparable across
   checkpoints).
-- **Cadence** — the launcher evaluates each checkpoint; `evaluate_interval` (int)
-  is now threaded through **all three launchers** for step-based cadence.
+- **Cadence** — SFT/DPO evaluate per exported checkpoint (cadence follows
+  checkpointing). `evaluate_interval` (int) for explicit step-based cadence is
+  **RLFT-only** in google-genai 2.14.0 — the SDK serializes it under the
+  reinforcement spec, so it 400s on SFT/DPO jobs; it is threaded through
+  `launch_rlft_job` only. See [docs/notes/tuning-apis.md](docs/notes/tuning-apis.md).
 - **Results** — land under `output_uri_prefix` in Cloud Storage; view them there
   or in **Agent Platform Studio → Tune and Distill → _your tuned model_**.
 

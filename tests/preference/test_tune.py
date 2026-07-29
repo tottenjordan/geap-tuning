@@ -75,15 +75,14 @@ def test_launch_preference_job_continuous_from_pretuned() -> None:
     assert kwargs["config"].pre_tuned_model_checkpoint_id == "2"
 
 
-def test_launch_preference_job_threads_evaluate_interval() -> None:
+def test_launch_preference_job_rejects_evaluate_interval() -> None:
+    # evaluate_interval is RLFT-only in google-genai 2.14.0 (serialized under
+    # reinforcementTuningSpec); the DPO launcher omits it, so passing it errors.
     client = MagicMock()
-    launch_preference_job(
-        client, train_uri="gs://b/t.jsonl", display_name="d", evaluate_interval=50
-    )
-    assert client.tunings.tune.call_args.kwargs["config"].evaluate_interval == 50
-
-
-def test_launch_preference_job_evaluate_interval_defaults_none() -> None:
-    client = MagicMock()
-    launch_preference_job(client, train_uri="gs://b/t.jsonl", display_name="d")
-    assert client.tunings.tune.call_args.kwargs["config"].evaluate_interval is None
+    with pytest.raises(TypeError):
+        launch_preference_job(
+            client,
+            train_uri="gs://b/t.jsonl",
+            display_name="d",
+            evaluate_interval=50,  # ty: ignore[unknown-argument]
+        )
