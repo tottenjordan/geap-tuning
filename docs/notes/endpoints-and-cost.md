@@ -56,4 +56,11 @@ gcloud ai endpoints delete <ENDPOINT_ID> --region="$GCP_REGION" --project="$PROJ
 ```
 
 Terminal tuning **jobs** are just metadata — cheap to keep, and keeping them is
-what makes the examples' reuse-by-display-name work. Don't delete the jobs.
+what makes the examples' reuse-by-display-name work. Don't delete the jobs — and
+in fact you **can't**: `tuningJobs` exposes **no `delete` method** (a REST
+`DELETE …/tuningJobs/<id>` returns `404 Method not found` on both `v1` and
+`v1beta1`; only a *running* job can be *cancelled*). So "cleaning up a job"
+always means deleting the **model + endpoint it produced** — fetch them from
+`client.tunings.get(name=…).tuned_model` (`.model`, `.endpoint`), then either the
+two-step `gcloud` above or a one-shot REST delete of the endpoint with
+`?force=true` (undeploys before deleting) followed by `…/models/<id>` delete.
