@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from geap_tuning.jobs import (
+    cancel_tuning_job,
+    cancel_tuning_job_by_display_name,
     checkpoint_endpoint,
     find_tuning_job_by_display_name,
     get_default_checkpoint_id,
@@ -151,3 +153,34 @@ def test_set_default_checkpoint() -> None:
     kwargs = client.models.update.call_args.kwargs
     assert kwargs["model"] == "projects/p/locations/l/models/m@1"
     assert kwargs["config"].default_checkpoint_id == "1"
+
+
+def test_cancel_tuning_job_calls_sdk() -> None:
+    client = MagicMock()
+    name = "projects/p/locations/l/tuningJobs/123"
+    result = cancel_tuning_job(client, name)
+    client.tunings.cancel.assert_called_once_with(name=name)
+    assert result is client.tunings.cancel.return_value
+
+
+def test_cancel_tuning_job_by_display_name_found() -> None:
+    client = MagicMock()
+    client.tunings.list.return_value = [
+        SimpleNamespace(
+            tuned_model_display_name="geap-rlft-math-v1",
+            state="JOB_STATE_RUNNING",
+            name="projects/p/locations/l/tuningJobs/999",
+        ),
+    ]
+    name = cancel_tuning_job_by_display_name(client, "geap-rlft-math-v1")
+    assert name == "projects/p/locations/l/tuningJobs/999"
+    client.tunings.cancel.assert_called_once_with(name="projects/p/locations/l/tuningJobs/999")
+
+
+def test_cancel_tuning_job_by_display_name_missing() -> None:
+    client = MagicMock()
+    client.tunings.list.return_value = [
+        SimpleNamespace(tuned_model_display_name="other", state="JOB_STATE_RUNNING", name="n"),
+    ]
+    assert cancel_tuning_job_by_display_name(client, "geap-rlft-math-v1") is None
+    client.tunings.cancel.assert_not_called()
