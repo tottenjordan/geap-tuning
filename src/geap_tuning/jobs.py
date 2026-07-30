@@ -53,6 +53,35 @@ def find_tuning_job_by_display_name(
     return None
 
 
+def cancel_tuning_job(
+    client: Any,  # noqa: ANN401 - SDK client type is dynamic
+    name: str,
+) -> Any:  # noqa: ANN401 - returns the SDK cancel response
+    """Request cancellation of a running/pending tuning job by resource name.
+
+    Only a non-terminal job can be cancelled; the SDK exposes no ``delete`` for
+    tuning jobs (see ``docs/notes/endpoints-and-cost.md``).
+    """
+    return client.tunings.cancel(name=name)
+
+
+def cancel_tuning_job_by_display_name(
+    client: Any,  # noqa: ANN401 - SDK client type is dynamic
+    display_name: str,
+) -> str | None:
+    """Find a live job by display name and cancel it; return its name or ``None``.
+
+    Uses :func:`find_tuning_job_by_display_name`, whose default states include
+    ``JOB_STATE_RUNNING`` / ``JOB_STATE_PENDING``, so an in-flight job is found.
+    Returns ``None`` when no cancellable job matches.
+    """
+    job = find_tuning_job_by_display_name(client, display_name)
+    if job is None:
+        return None
+    cancel_tuning_job(client, job.name)
+    return job.name
+
+
 def list_checkpoints(job: Any) -> list[Any]:  # noqa: ANN401 - SDK job type is dynamic
     """Return the job's intermediate checkpoints (empty when none were exported).
 

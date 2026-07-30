@@ -9,8 +9,12 @@ sweep logs each run there) and [checkpointing](checkpoints-and-continuous-tuning
 [`src/geap_tuning/doe.py`](../../src/geap_tuning/doe.py) (sweep orchestration) and
 [`src/geap_tuning/viz.py`](../../src/geap_tuning/viz.py) (plots), demoed by
 [`examples/run_doe.py`](../../examples/run_doe.py) /
-[`notebooks/10_doe.ipynb`](../../notebooks/10_doe.ipynb) (runs a sweep) and the
-read-only [`examples/run_multi_run_viz.py`](../../examples/run_multi_run_viz.py) /
+[`notebooks/10_doe.ipynb`](../../notebooks/10_doe.ipynb) (SFT sweep),
+[`examples/run_doe_dpo.py`](../../examples/run_doe_dpo.py) +
+[`examples/run_doe_rlft.py`](../../examples/run_doe_rlft.py) /
+[`notebooks/12_doe_dpo_rlft.ipynb`](../../notebooks/12_doe_dpo_rlft.ipynb) (DPO &
+RLFT sweeps), and the read-only
+[`examples/run_multi_run_viz.py`](../../examples/run_multi_run_viz.py) /
 [`notebooks/11_multi_run_viz.ipynb`](../../notebooks/11_multi_run_viz.ipynb) (charts
 an already-tracked experiment — **zero tuning cost**).
 
@@ -18,28 +22,41 @@ an already-tracked experiment — **zero tuning cost**).
 
 Declare a full-factorial grid once; run it as a unit.
 
-- `SweepConfig(name, base_model, grid, fixed)` — `grid` maps a `launch_sft_job`
-  keyword (`epochs`, `adapter_size`, `learning_rate_multiplier`) to the values to
-  cross; `fixed` is constant kwargs applied to every run.
+- `SweepConfig(name, base_model, method, grid, fixed)` — `method` (`"SFT"` /
+  `"DPO"` / `"RLFT"`, default `"SFT"`) selects the launcher via `_LAUNCHERS`. `grid`
+  maps a launcher keyword to the values to cross (SFT/DPO: `epochs`, `adapter_size`,
+  `learning_rate_multiplier`; DPO also `beta`; RLFT also `samples_per_prompt`);
+  `fixed` is constant kwargs applied to every run — carry **non-scalar** kwargs
+  (e.g. an RLFT `reward_config`) here.
 - `expand_grid(grid)` — full cross-product over **sorted** keys (deterministic);
   empty grid → `[{}]`.
-- `run_spec_slug(point)` — deterministic, display-name-safe slug (sorted `key<value>`,
-  non-alnum → `_`, so `1.0` → `1_0`); empty → `"default"`.
+- `run_spec_slug(point)` — deterministic, **resource-ID-safe** slug (sorted
+  `key<value>`, lowercased, every non-`[a-z0-9-]` char → `-`, so `adapter_size` →
+  `adapter-size` and `1.0` → `1-0`); empty → `"default"`. Underscores are **not**
+  allowed: the slug feeds `display_name`, reused as both the tuning-job display name
+  and the Vertex AI Experiments run name, which must match `[a-z0-9][a-z0-9-]{0,127}`.
 - `build_run_specs(sweep)` — one `RunSpec` per point; `display_name =
   f"geap-doe-{sweep.name}-{slug}"` is the **idempotency key**; `params = fixed | point`.
 - `run_sweep(client, sweep, *, train_uri, val_uri, evaluate_fn, experiment=..., ...)`
   — per spec: reuse a job matching its display name (via
-  `find_tuning_job_by_display_name`) **or** launch (default dispatches
-  `launch_sft_job(..., export_last_checkpoint_only=False)` so per-checkpoint
-  endpoints exist for curves), wait, resolve `tuned_endpoint`, score with
-  `evaluate_fn(endpoint)`, and — when `experiment` is set — log params + numeric
-  metrics to Vertex AI Experiments. Injectable seams (`launch_fn`, `wait_fn`,
-  `find_fn`) keep it unit-testable without live GCP.
+  `find_tuning_job_by_display_name`) **or** launch (default is the `sweep.method`
+  launcher in `_LAUNCHERS`, each called with `export_last_checkpoint_only=False` so
+  per-checkpoint endpoints exist for curves), wait, resolve `tuned_endpoint`, score
+  with `evaluate_fn(endpoint)`, and — when `experiment` is set — log **scalar**
+  params + numeric metrics to Vertex AI Experiments. Injectable seams (`launch_fn`,
+  `wait_fn`, `find_fn`) keep it unit-testable without live GCP.
+- `_LAUNCHERS = {"SFT": ..., "DPO": ..., "RLFT": ...}` — method → launcher adapter
+  (`launch_sft_job` / `launch_preference_job` / `launch_rlft_job`); an unknown
+  `method` raises `KeyError`.
+- `HEADLINE_METRIC` / `METRICS_BY_METHOD` — per-method metric keys (SFT/RLFT →
+  `accuracy`, **DPO → `win_rate`**). Examples/notebooks read these so the winner
+  selection and plots stay method-correct without hardcoding.
 - `select_best_run(results, *, metric)` — max metric, sorted-name tie-break
   (generalizes `sft_vision.evaluate.select_best_experiment`).
 - `aggregate_results(results, *, metrics)` — flatten runs to one row each
-  (`{"run", "base_model", **params, **metrics}`); the **single shaped structure**
-  feeding both the table and the plots.
+  (`{"run", "base_model", **scalar params, **metrics}`); the **single shaped
+  structure** feeding both the table and the plots. Non-scalar params (RLFT
+  `reward_config`) are dropped by `_scalar_params`.
 - `collect_checkpoint_curve(job, evaluate_fn, *, metric)` — `(epoch, metric)` per
   exported checkpoint (needs `export_last_checkpoint_only=False`), sorted by epoch.
 
@@ -48,9 +65,17 @@ Experiments logging, routed through [`experiments.py`](../../src/geap_tuning/exp
 (the one sanctioned mix point). `init_experiment` is called by the example/notebook,
 **not** by `run_sweep`.
 
-**Scope:** SFT only. DPO/RLFT sweeps are a follow-up — the sketched design is a
-launcher registry keyed on the sweep's `method` dispatching to
-`launch_preference_job` / `launch_rlft_job`.
+**Methods (SFT / DPO / RLFT):** the same `run_sweep` drives all three; set
+`SweepConfig.method`. Per-method specifics:
+- **DPO** (`examples/run_doe_dpo.py`) — grid crosses `beta` x `epochs` on the
+  preference dataset; headline is **`win_rate`** (there is no accuracy), computed
+  offline by a **base-model autorater** (tuned reply vs. the dispreferred
+  reference), so the driver needs a `judge_fn`.
+- **RLFT** (`examples/run_doe_rlft.py`) — grid crosses `epochs` x
+  `samples_per_prompt`; the **`reward_config` is a non-scalar object carried in
+  `sweep.fixed`** (a declarative string-match reward here), and is **preflighted**
+  once with `validate_reward_config` before the sweep spends money. Base model is
+  `gemini-3.5-flash` (regional client only — the global endpoint excludes tuning).
 
 ## Visualization module (`viz.py`)
 
@@ -97,8 +122,25 @@ from our own offline per-checkpoint eval — never from Layer-1.
 - **`experiment_dataframe` columns are prefixed** (`metric.`, `param.`, `run_name`)
   — plot directly and `metric="accuracy"`/`label_key="run"` won't match. Run it
   through `normalize_experiment_rows` first.
+- **Slugs must be Vertex-resource-ID-safe — no underscores.** The run slug feeds
+  `display_name`, reused as both the tuning-job display name *and* the Experiments
+  run name, which are validated against `[a-z0-9][a-z0-9-]{0,127}`. An underscore
+  (from a key like `adapter_size` or a `.`→`_` float) makes `aiplatform.start_run`
+  400 with `resource ID … must match the regular expression`. `run_spec_slug`
+  lowercases and maps every non-`[a-z0-9-]` char to `-` for this reason.
 - **Idempotency is by display name.** Re-running a sweep reuses finished jobs; to
   force a re-tune, change `sweep.name` or the grid (both change the slug).
 - **Curves need all checkpoints.** `run_sweep`'s default launcher sets
   `export_last_checkpoint_only=False`; a custom `launch_fn` must too, or
   `collect_checkpoint_curve` sees only the final checkpoint.
+- **Non-scalar params go in `sweep.fixed`, never the grid.** An RLFT
+  `reward_config` is an object: it must not reach `run_spec_slug` (does
+  `f"{k}{v}"`), the aggregate rows, or `aiplatform.log_params` (scalars only). It
+  rides in `sweep.fixed` (splatted to the launcher) and is filtered out of the rows
+  + Experiments params by `_scalar_params` (keeps only `str | int | float`; `bool`
+  is a valid scalar). Only grid points are slugged, so `fixed` never affects the
+  display name / idempotency key.
+- **DPO headlines `win_rate`, not `accuracy`.** Read `HEADLINE_METRIC[method]` /
+  `METRICS_BY_METHOD[method]` — calling `select_best_run` / `aggregate_results` with
+  the default `accuracy` on DPO results `KeyError`s (DPO metrics are
+  `{win_rate, wins, losses, ties, n}`).

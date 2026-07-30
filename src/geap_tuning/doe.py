@@ -10,9 +10,11 @@ compared side by side. The pure helpers (:func:`expand_grid`,
 :func:`run_sweep` driver takes injectable seams so it too is testable without
 live GCP.
 
-Scope: **SFT only** (dispatches :func:`geap_tuning.sft.tune.launch_sft_job`).
-DPO/RLFT sweeps are a documented follow-up (see
-``docs/notes/doe-and-visualization.md``). The tune call stays on the
+Multi-method: :attr:`SweepConfig.method` (``"SFT"`` / ``"DPO"`` / ``"RLFT"``)
+selects the launcher via the :data:`_LAUNCHERS` registry, dispatching to
+:func:`geap_tuning.sft.tune.launch_sft_job`,
+:func:`geap_tuning.preference.tune.launch_preference_job`, or
+:func:`geap_tuning.rlft.tune.launch_rlft_job`. The tune call stays on the
 ``google.genai`` path; the only SDK mix is the Experiments logging, which is
 routed through :mod:`geap_tuning.experiments` (the one sanctioned mix point).
 """
@@ -32,6 +34,8 @@ from geap_tuning.jobs import (
     tuned_endpoint,
     wait_for_tuning_job,
 )
+from geap_tuning.preference.tune import launch_preference_job
+from geap_tuning.rlft.tune import launch_rlft_job
 from geap_tuning.sft.tune import launch_sft_job
 
 if TYPE_CHECKING:
@@ -39,19 +43,36 @@ if TYPE_CHECKING:
 
 _DEFAULT_METRICS = ("accuracy", "macro_f1")
 
+# Per-method reporting metrics. DPO has no ``accuracy`` — its headline is the
+# autorater ``win_rate`` — so the examples/notebook read these instead of
+# hardcoding a metric key. ``HEADLINE_METRIC`` feeds ``select_best_run``;
+# ``METRICS_BY_METHOD`` feeds ``aggregate_results`` / the plots.
+HEADLINE_METRIC = {"SFT": "accuracy", "DPO": "win_rate", "RLFT": "accuracy"}
+METRICS_BY_METHOD = {
+    "SFT": ("accuracy", "macro_f1"),
+    "DPO": ("win_rate",),
+    "RLFT": ("accuracy",),
+}
+
 
 @dataclass(frozen=True)
 class SweepConfig:
-    """Declarative full-factorial SFT hyperparameter sweep.
+    """Declarative full-factorial hyperparameter sweep.
 
-    ``grid`` maps a :func:`launch_sft_job` keyword (``epochs``, ``adapter_size``,
-    ``learning_rate_multiplier``) to the values to cross; ``fixed`` supplies
-    constant kwargs applied to every run. ``name`` prefixes each run's display
-    name (the idempotency key) and is a natural experiment name.
+    ``method`` (``"SFT"`` / ``"DPO"`` / ``"RLFT"``) selects the launcher via
+    :data:`_LAUNCHERS`. ``grid`` maps a launcher keyword to the values to cross
+    (SFT/DPO: ``epochs``, ``adapter_size``, ``learning_rate_multiplier``; DPO also
+    ``beta``; RLFT also ``samples_per_prompt``); ``fixed`` supplies constant kwargs
+    applied to every run. Carry **non-scalar** kwargs (e.g. an RLFT
+    ``reward_config``) in ``fixed`` — they stay out of the run slug and are
+    filtered from the aggregate rows / Experiments params by :func:`_scalar_params`.
+    ``name`` prefixes each run's display name (the idempotency key) and is a
+    natural experiment name.
     """
 
     name: str
     base_model: str = "gemini-2.5-flash-lite"
+    method: str = "SFT"
     grid: Mapping[str, Sequence[Any]] = field(default_factory=dict)
     fixed: Mapping[str, Any] = field(default_factory=dict)
 
@@ -91,16 +112,24 @@ def expand_grid(grid: Mapping[str, Sequence[Any]]) -> list[dict[str, Any]]:
 
 
 def run_spec_slug(point: Mapping[str, Any]) -> str:
-    """Return a deterministic, display-name-safe slug for a grid ``point``.
+    """Return a deterministic, resource-ID-safe slug for a grid ``point``.
 
-    Keys are sorted; each ``key<value>`` pair is joined by ``-``; any character
-    that is not alphanumeric or ``-`` (e.g. the ``.`` in a float) becomes ``_``.
-    An empty point slugs to ``"default"``.
+    The slug becomes part of the run's ``display_name``, which is reused both as
+    the tuning-job display name and as the Vertex AI Experiments run name. Vertex
+    resource IDs must match ``[a-z0-9][a-z0-9-]{0,127}`` (lowercase alphanumerics
+    and hyphens only — **no underscores**), so keys are sorted, each
+    ``key<value>`` pair is joined by ``-``, everything is lowercased, and any
+    other character (the ``_`` in a key like ``adapter_size`` or the ``.`` in a
+    float) becomes ``-``. Leading/trailing hyphens are stripped. An empty point
+    slugs to ``"default"``.
     """
     if not point:
         return "default"
     raw = "-".join(f"{key}{point[key]}" for key in sorted(point))
-    return "".join(char if char.isalnum() or char == "-" else "_" for char in raw)
+    safe = "".join(
+        char if char.isascii() and (char.isalnum() or char == "-") else "-" for char in raw.lower()
+    )
+    return safe.strip("-") or "default"
 
 
 def build_run_specs(sweep: SweepConfig) -> list[RunSpec]:
@@ -149,7 +178,7 @@ def aggregate_results(
     rows: list[dict[str, Any]] = []
     for result in results:
         row: dict[str, Any] = {"run": result.spec.name, "base_model": result.spec.base_model}
-        row.update(result.spec.params)
+        row.update(_scalar_params(result.spec.params))
         for metric in metrics:
             if metric in result.metrics:
                 row[metric] = result.metrics[metric]
@@ -157,7 +186,7 @@ def aggregate_results(
     return rows
 
 
-def _default_launch(
+def _launch_sft(
     client: Any,  # noqa: ANN401 - SDK client type is dynamic
     spec: RunSpec,
     train_uri: str,
@@ -175,6 +204,46 @@ def _default_launch(
     )
 
 
+def _launch_preference(
+    client: Any,  # noqa: ANN401 - SDK client type is dynamic
+    spec: RunSpec,
+    train_uri: str,
+    val_uri: str | None,
+) -> Any:  # noqa: ANN401 - returns the SDK job object
+    """Launch ``spec`` as a DPO job (grid may cross ``beta`` alongside ``epochs``)."""
+    return launch_preference_job(
+        client,
+        train_uri=train_uri,
+        val_uri=val_uri,
+        display_name=spec.display_name,
+        base_model=spec.base_model,
+        export_last_checkpoint_only=False,
+        **spec.params,
+    )
+
+
+def _launch_rlft(
+    client: Any,  # noqa: ANN401 - SDK client type is dynamic
+    spec: RunSpec,
+    train_uri: str,
+    val_uri: str | None,
+) -> Any:  # noqa: ANN401 - returns the SDK job object
+    """Launch ``spec`` as an RLFT job (``reward_config`` carried via ``spec.params``)."""
+    return launch_rlft_job(
+        client,
+        train_uri=train_uri,
+        val_uri=val_uri,
+        display_name=spec.display_name,
+        base_model=spec.base_model,
+        export_last_checkpoint_only=False,
+        **spec.params,
+    )
+
+
+# Registry keyed on ``SweepConfig.method``; an unknown method raises ``KeyError``.
+_LAUNCHERS = {"SFT": _launch_sft, "DPO": _launch_preference, "RLFT": _launch_rlft}
+
+
 def _numeric_metrics(metrics: Mapping[str, Any]) -> dict[str, float]:
     """Keep only scalar numeric metric values (Experiments params are flat/scalar)."""
     return {
@@ -182,6 +251,15 @@ def _numeric_metrics(metrics: Mapping[str, Any]) -> dict[str, float]:
         for key, value in metrics.items()
         if isinstance(value, Real) and not isinstance(value, bool)
     }
+
+
+def _scalar_params(params: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep only scalar params (drops e.g. an RLFT ``reward_config`` object).
+
+    Non-scalar kwargs live in ``sweep.fixed`` for the launcher to splat, but must
+    not reach the aggregate rows or ``aiplatform.log_params`` (scalars only).
+    """
+    return {key: value for key, value in params.items() if isinstance(value, str | int | float)}
 
 
 def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver testable
@@ -199,15 +277,16 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     """Run every grid point of ``sweep``, reusing jobs and logging to Experiments.
 
     For each :class:`RunSpec`: reuse a job matching its display name if one
-    exists (else launch via ``launch_fn``, defaulting to an SFT launch), wait for
-    completion, resolve the tuned endpoint, and score it with ``evaluate_fn``.
+    exists (else launch via ``launch_fn``, defaulting to the ``sweep.method``
+    launcher in :data:`_LAUNCHERS`), wait for completion, resolve the tuned
+    endpoint, and score it with ``evaluate_fn``.
     When ``experiment`` is set, each run's params + numeric metrics are logged to
     Vertex AI Experiments (the caller must have called
     :func:`geap_tuning.experiments.init_experiment` first). Returns one
     :class:`RunResult` per spec, ready for :func:`aggregate_results` /
     :func:`select_best_run`.
     """
-    launch = launch_fn or _default_launch
+    launch = launch_fn or _LAUNCHERS[sweep.method]
     results: list[RunResult] = []
     for spec in build_run_specs(sweep):
         existing = find_fn(client, spec.display_name)
@@ -217,7 +296,7 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
         endpoint = tuned_endpoint(job)
         metrics = evaluate_fn(endpoint)
         if experiment is not None:
-            params = {"base_model": spec.base_model, **spec.params}
+            params = _scalar_params({"base_model": spec.base_model, **spec.params})
             with track_run(spec.display_name, params=params):
                 log_summary_metrics(_numeric_metrics(metrics))
         results.append(

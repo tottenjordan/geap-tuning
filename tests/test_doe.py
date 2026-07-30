@@ -7,12 +7,15 @@ logging is monkeypatched (mirroring ``tests/test_experiments.py``) so nothing
 here touches live GCP.
 """
 
+import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
 from geap_tuning.doe import (
+    HEADLINE_METRIC,
+    METRICS_BY_METHOD,
     RunResult,
     RunSpec,
     SweepConfig,
@@ -24,6 +27,7 @@ from geap_tuning.doe import (
     run_sweep,
     select_best_run,
 )
+from geap_tuning.rlft.tune import build_string_match_reward_config
 
 # --- expand_grid ---------------------------------------------------------------
 
@@ -57,7 +61,8 @@ def test_expand_grid_is_deterministic_over_sorted_keys() -> None:
 
 
 def test_run_spec_slug_sorted_and_joined() -> None:
-    assert run_spec_slug({"epochs": 2, "adapter_size": 8}) == "adapter_size8-epochs2"
+    # Underscores in the key are hyphenated: Vertex resource IDs are [a-z0-9-] only.
+    assert run_spec_slug({"epochs": 2, "adapter_size": 8}) == "adapter-size8-epochs2"
 
 
 def test_run_spec_slug_empty_point() -> None:
@@ -66,8 +71,15 @@ def test_run_spec_slug_empty_point() -> None:
 
 def test_run_spec_slug_floats_are_display_safe() -> None:
     slug = run_spec_slug({"learning_rate_multiplier": 1.0})
-    assert slug == "learning_rate_multiplier1_0"
+    assert slug == "learning-rate-multiplier1-0"
     assert "." not in slug
+    assert "_" not in slug
+
+
+def test_run_spec_slug_is_resource_id_safe() -> None:
+    # Every realistic grid key/value must yield an ID matching the Vertex regex.
+    slug = run_spec_slug({"adapter_size": 8, "learning_rate_multiplier": 0.5})
+    assert re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", slug)
 
 
 def test_run_spec_slug_is_deterministic() -> None:
@@ -272,6 +284,106 @@ def test_run_sweep_skips_experiments_when_none(no_tracking: dict[str, MagicMock]
     )
     no_tracking["track"].assert_not_called()
     no_tracking["log"].assert_not_called()
+
+
+# --- method dispatch (launcher registry) ---------------------------------------
+
+
+def test_sweepconfig_default_method_is_sft() -> None:
+    assert SweepConfig(name="s").method == "SFT"
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_dispatches_dpo() -> None:
+    client = MagicMock()
+    run_sweep(
+        client,
+        SweepConfig(name="s", method="DPO", grid={"beta": [0.1], "epochs": [1]}),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=lambda _ep: {"win_rate": 0.5},
+        wait_fn=lambda _c, _n: _job(),
+        find_fn=lambda _c, _dn, **_k: None,
+    )
+    cfg = client.tunings.tune.call_args.kwargs["config"]
+    assert cfg.method == "PREFERENCE_TUNING"
+    assert cfg.beta == 0.1
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_dispatches_rlft() -> None:
+    client = MagicMock()
+    run_sweep(
+        client,
+        SweepConfig(
+            name="s",
+            method="RLFT",
+            grid={"samples_per_prompt": [4], "epochs": [2]},
+            fixed={"reward_config": build_string_match_reward_config()},
+        ),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=lambda _ep: {"accuracy": 0.5},
+        wait_fn=lambda _c, _n: _job(),
+        find_fn=lambda _c, _dn, **_k: None,
+    )
+    cfg = client.tunings.tune.call_args.kwargs["config"]
+    assert cfg.method == "REINFORCEMENT_TUNING"
+    assert cfg.samples_per_prompt == 4
+    assert cfg.reward_config is not None  # the reward reached the launcher
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_unknown_method_raises() -> None:
+    client = MagicMock()
+    with pytest.raises(KeyError):
+        run_sweep(
+            client,
+            SweepConfig(name="s", method="XYZ", grid={"epochs": [1]}),
+            train_uri="gs://b/train.jsonl",
+            evaluate_fn=lambda _ep: {"accuracy": 0.5},
+            wait_fn=lambda _c, _n: _job(),
+            find_fn=lambda _c, _dn, **_k: None,
+        )
+
+
+# --- per-method metrics + scalar-param filtering -------------------------------
+
+
+def test_headline_metric_by_method() -> None:
+    assert HEADLINE_METRIC["SFT"] == "accuracy"
+    assert HEADLINE_METRIC["DPO"] == "win_rate"
+    assert HEADLINE_METRIC["RLFT"] == "accuracy"
+    assert METRICS_BY_METHOD["DPO"] == ("win_rate",)
+
+
+def test_aggregate_results_drops_non_scalar_params() -> None:
+    (row,) = aggregate_results(
+        [_result("r", {"epochs": 1, "reward_config": object()}, {"accuracy": 0.5})]
+    )
+    assert row["epochs"] == 1
+    assert "reward_config" not in row
+
+
+def test_run_sweep_logs_only_scalar_params(no_tracking: dict[str, MagicMock]) -> None:
+    client = MagicMock()
+    run_sweep(
+        client,
+        SweepConfig(
+            name="s",
+            method="RLFT",
+            grid={"samples_per_prompt": [4], "epochs": [2]},
+            fixed={"reward_config": build_string_match_reward_config()},
+        ),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=lambda _ep: {"accuracy": 0.5},
+        wait_fn=lambda _c, _n: _job(),
+        find_fn=lambda _c, _dn, **_k: None,
+        experiment="exp",
+    )
+    params = no_tracking["track"].call_args.kwargs["params"]
+    assert params["base_model"] == "gemini-2.5-flash-lite"
+    assert params["samples_per_prompt"] == 4
+    assert params["epochs"] == 2
+    assert "reward_config" not in params
 
 
 # --- collect_checkpoint_curve --------------------------------------------------
