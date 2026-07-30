@@ -82,7 +82,7 @@ def main() -> None:
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
     use_tb = "--tensorboard" in sys.argv
-    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
+    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
     if use_tb:
         print("TensorBoard: ON (provisioning may take ~10-20 min and incurs cost)")
     else:
@@ -121,6 +121,7 @@ def main() -> None:
             samples_per_prompt=SAMPLES_PER_PROMPT,
             reward_config=reward,
             export_last_checkpoint_only=False,  # keep every checkpoint for the curve
+            labels=cfg.labels,
         )
         print(f"Launched tuning job: {job.name}")
     else:
@@ -131,7 +132,7 @@ def main() -> None:
     tensorboard = None
     if use_tb:
         tensorboard = get_or_create_tensorboard(
-            TENSORBOARD_DISPLAY_NAME, project=cfg.project, location=cfg.location
+            TENSORBOARD_DISPLAY_NAME, project=cfg.project, location=cfg.location, labels=cfg.labels
         )
         print(f"TensorBoard: {tensorboard}")
     init_experiment(

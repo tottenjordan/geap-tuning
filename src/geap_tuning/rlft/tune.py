@@ -192,6 +192,7 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
     evaluate_interval: int | None = None,
     pre_tuned_model_checkpoint_id: str | None = None,
     checkpoint_interval: int | None = None,
+    labels: dict[str, str] | None = None,
 ) -> Any:  # noqa: ANN401 - SDK returns a dynamically-typed TuningJob
     """Submit an RLFT job and return the created tuning job.
 
@@ -218,6 +219,10 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
     a :func:`build_composite_reward_config` result as ``composite_reward_config``
     to score with several weighted scorers, and the single-reward default is
     skipped. When neither is given, a default code-execution reward is used.
+
+    ``labels`` behaves as in :func:`launch_sft_job`: resource labels on the job
+    that propagate to the generated Model/Endpoint; ``None`` omits the field.
+    See ``docs/notes/resource-labels.md``.
     """
     single_reward = None if composite_reward_config else (reward_config or build_reward_config())
     config = types.CreateTuningJobConfig(
@@ -235,6 +240,7 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
         evaluate_interval=evaluate_interval,
         pre_tuned_model_checkpoint_id=pre_tuned_model_checkpoint_id,
         checkpoint_interval=checkpoint_interval,
+        labels=labels,
     )
     return client.tunings.tune(
         base_model=base_model,

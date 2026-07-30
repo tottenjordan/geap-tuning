@@ -90,7 +90,7 @@ def main() -> None:
     """Launch (or reuse) an SFT job with a comprehensive managed-eval config."""
     cfg = load_config()
     client = genai_client(cfg)
-    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
+    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
     if cfg.location != EVAL_REGION:
         print(
             f"WARNING: managed eval is {EVAL_REGION}-only (Preview); "
@@ -117,6 +117,7 @@ def main() -> None:
             val_uri=val_uri,
             display_name=DISPLAY_NAME,
             evaluation_config=eval_config,
+            labels=cfg.labels,
         )
         print(f"Launched tuning job with managed eval: {job.name}")
     else:

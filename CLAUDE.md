@@ -46,6 +46,7 @@ Config lives in `.env` (present, git-ignored — never commit it). Load it befor
 - **GCP project**: `PROJECT_ID`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_PROJECT_NUMBER`, `GCP_REGION`, `GOOGLE_CLOUD_LOCATION`.
 - **API routing / auth**: `GOOGLE_GENAI_USE_VERTEXAI` (true → Vertex/GEAP path), `GOOGLE_API_KEY` / `GEMINI_API_KEY` (AI Studio / Developer API path).
 - **Cloud Storage** (dataset + checkpoint staging): `GCS_BUCKET_NAME`, `BUCKET`, `GOOGLE_CLOUD_STORAGE_BUCKET`.
+- **Resource labels**: `LABEL_KEY` / `LABEL_VALUE` (defaults `project` / `geap-tuning`) → resolved once into `cfg.labels` (a `{key: value}` map, empty when either is unset). Every resource the repo creates is labeled from `cfg.labels`: the three tuning-job launchers pass it into `CreateTuningJobConfig(labels=...)` (GEAP propagates it to the generated Model + Endpoint) and `experiments.get_or_create_tensorboard` labels a newly created Managed TensorBoard. `aiplatform.init`/`start_run` and GCS objects have no resource-label param, so they're excluded. Backward-compatible (unset ⇒ `labels=None`, a no-op) and Vertex-path-only. See [docs/notes/resource-labels.md](docs/notes/resource-labels.md).
 
 Note the redundant aliases (`PROJECT_ID`/`GOOGLE_CLOUD_PROJECT`, three bucket vars). When writing an example, decide which var name it reads and be consistent; don't assume all three buckets point at the same place.
 

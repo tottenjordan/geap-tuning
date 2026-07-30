@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 from google import genai
@@ -21,6 +21,12 @@ _PROJECT_KEYS = ("PROJECT_ID", "GOOGLE_CLOUD_PROJECT")
 _LOCATION_KEYS = ("GOOGLE_CLOUD_LOCATION", "GCP_REGION")
 _BUCKET_KEYS = ("GCS_BUCKET_NAME", "BUCKET", "GOOGLE_CLOUD_STORAGE_BUCKET")
 _DEFAULT_LOCATION = "us-central1"
+
+# A single resource label, sourced from one key/value env pair. Kept as a
+# {key: value} map (not a scalar pair) so it drops straight into the SDK
+# ``labels=`` kwargs; empty when either var is unset.
+_LABEL_KEY_ENV = "LABEL_KEY"
+_LABEL_VALUE_ENV = "LABEL_VALUE"
 
 # Gemini 3.x models serve *inference* only from the ``global`` endpoint. NOTE:
 # tuning is NOT available on ``global`` (see ``requires_global_endpoint``), so this
@@ -37,6 +43,7 @@ class TuningConfig:
     project: str
     location: str
     bucket: str  # normalized to a gs:// URI
+    labels: dict[str, str] = field(default_factory=dict)  # env-driven; empty when unset
 
 
 def _first(env: dict[str, str], keys: tuple[str, ...]) -> str | None:
@@ -67,7 +74,16 @@ def load_config(env: dict[str, str] | None = None) -> TuningConfig:
         bucket = f"gs://{bucket}"
 
     location = _first(env, _LOCATION_KEYS) or _DEFAULT_LOCATION
-    return TuningConfig(project=project, location=location, bucket=bucket)
+
+    # One resource label, attached to every resource we create (tuning jobs and
+    # their generated model/endpoint, plus Managed TensorBoard). Both vars must
+    # be set for the label to apply; otherwise ``labels`` stays empty and label
+    # attachment is a no-op.
+    label_key = env.get(_LABEL_KEY_ENV)
+    label_value = env.get(_LABEL_VALUE_ENV)
+    labels = {label_key: label_value} if label_key and label_value else {}
+
+    return TuningConfig(project=project, location=location, bucket=bucket, labels=labels)
 
 
 def requires_global_endpoint(model: str | None) -> bool:

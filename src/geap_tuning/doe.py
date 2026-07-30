@@ -191,6 +191,7 @@ def _launch_sft(
     spec: RunSpec,
     train_uri: str,
     val_uri: str | None,
+    labels: dict[str, str] | None = None,
 ) -> Any:  # noqa: ANN401 - returns the SDK job object
     """Launch ``spec`` as an SFT job, exporting all checkpoints for curve eval."""
     return launch_sft_job(
@@ -200,6 +201,7 @@ def _launch_sft(
         display_name=spec.display_name,
         base_model=spec.base_model,
         export_last_checkpoint_only=False,
+        labels=labels,
         **spec.params,
     )
 
@@ -209,6 +211,7 @@ def _launch_preference(
     spec: RunSpec,
     train_uri: str,
     val_uri: str | None,
+    labels: dict[str, str] | None = None,
 ) -> Any:  # noqa: ANN401 - returns the SDK job object
     """Launch ``spec`` as a DPO job (grid may cross ``beta`` alongside ``epochs``)."""
     return launch_preference_job(
@@ -218,6 +221,7 @@ def _launch_preference(
         display_name=spec.display_name,
         base_model=spec.base_model,
         export_last_checkpoint_only=False,
+        labels=labels,
         **spec.params,
     )
 
@@ -227,6 +231,7 @@ def _launch_rlft(
     spec: RunSpec,
     train_uri: str,
     val_uri: str | None,
+    labels: dict[str, str] | None = None,
 ) -> Any:  # noqa: ANN401 - returns the SDK job object
     """Launch ``spec`` as an RLFT job (``reward_config`` carried via ``spec.params``)."""
     return launch_rlft_job(
@@ -236,6 +241,7 @@ def _launch_rlft(
         display_name=spec.display_name,
         base_model=spec.base_model,
         export_last_checkpoint_only=False,
+        labels=labels,
         **spec.params,
     )
 
@@ -269,10 +275,11 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     train_uri: str,
     val_uri: str | None = None,
     evaluate_fn: Callable[[str], dict[str, Any]],
-    launch_fn: Callable[[Any, RunSpec, str, str | None], Any] | None = None,
+    launch_fn: Callable[[Any, RunSpec, str, str | None, dict[str, str] | None], Any] | None = None,
     wait_fn: Callable[[Any, str], Any] = wait_for_tuning_job,
     find_fn: Callable[..., Any | None] = find_tuning_job_by_display_name,
     experiment: str | None = None,
+    labels: dict[str, str] | None = None,
 ) -> list[RunResult]:
     """Run every grid point of ``sweep``, reusing jobs and logging to Experiments.
 
@@ -282,7 +289,9 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     endpoint, and score it with ``evaluate_fn``.
     When ``experiment`` is set, each run's params + numeric metrics are logged to
     Vertex AI Experiments (the caller must have called
-    :func:`geap_tuning.experiments.init_experiment` first). Returns one
+    :func:`geap_tuning.experiments.init_experiment` first). ``labels`` are
+    resource labels forwarded to each launched tuning job (and its generated
+    Model/Endpoint); they are not logged as Experiments params. Returns one
     :class:`RunResult` per spec, ready for :func:`aggregate_results` /
     :func:`select_best_run`.
     """
@@ -291,7 +300,7 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     for spec in build_run_specs(sweep):
         existing = find_fn(client, spec.display_name)
         reused = existing is not None
-        job = existing if reused else launch(client, spec, train_uri, val_uri)
+        job = existing if reused else launch(client, spec, train_uri, val_uri, labels)
         job = wait_fn(client, job.name)
         endpoint = tuned_endpoint(job)
         metrics = evaluate_fn(endpoint)

@@ -70,7 +70,7 @@ def main() -> None:
     """Run the SFT -> RLFT continuous-tuning workflow against live GEAP."""
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only; both stages share it
-    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
+    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
 
     # === Stage 1: SFT seed (teach the "Answer: <n>" format) ===
     sft_paths = build_math_sft_dataset(SFT_DIR)
@@ -86,6 +86,7 @@ def main() -> None:
             val_uri=sft_val,
             display_name=sft_name,
             base_model=BASE_MODEL,
+            labels=cfg.labels,
         )
         print(f"Launched SFT seed job: {sft_job.name}")
     else:
@@ -118,6 +119,7 @@ def main() -> None:
             val_uri=rlft_val,
             display_name=rlft_name,
             base_model=sft_model,  # continue-tune from the SFT model
+            labels=cfg.labels,
         )
         print(f"Launched RLFT continuation job: {rlft_job.name}")
     else:

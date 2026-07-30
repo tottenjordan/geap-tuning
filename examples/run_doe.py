@@ -56,7 +56,7 @@ def main() -> None:
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only
     plot = "--plot" in sys.argv
-    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
+    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
     print(f"Sweep '{SWEEP.name}': grid={SWEEP.grid} → {2 * 2} runs")
 
     # 1. Build and stage the SFT dataset (train/val staged; test held out locally).
@@ -85,6 +85,7 @@ def main() -> None:
         val_uri=val_uri,
         evaluate_fn=evaluate_fn,
         experiment=EXPERIMENT_NAME,
+        labels=cfg.labels,
     )
     for result in results:
         tag = "reused" if result.reused else "launched"

@@ -49,9 +49,20 @@ def test_get_or_create_tensorboard_creates_when_absent(fake_aiplatform: MagicMoc
         SimpleNamespace(display_name="other", resource_name="tb/other"),
     ]
     fake_aiplatform.Tensorboard.create.return_value = SimpleNamespace(resource_name="tb/new")
-    name = experiments.get_or_create_tensorboard("mine", project="p", location="l")
+    name = experiments.get_or_create_tensorboard(
+        "mine", project="p", location="l", labels={"project": "geap-tuning"}
+    )
     assert name == "tb/new"
-    assert fake_aiplatform.Tensorboard.create.call_args.kwargs["display_name"] == "mine"
+    create_kwargs = fake_aiplatform.Tensorboard.create.call_args.kwargs
+    assert create_kwargs["display_name"] == "mine"
+    assert create_kwargs["labels"] == {"project": "geap-tuning"}
+
+
+def test_get_or_create_tensorboard_labels_default_none(fake_aiplatform: MagicMock) -> None:
+    fake_aiplatform.Tensorboard.list.return_value = []
+    fake_aiplatform.Tensorboard.create.return_value = SimpleNamespace(resource_name="tb/new")
+    experiments.get_or_create_tensorboard("mine", project="p", location="l")
+    assert fake_aiplatform.Tensorboard.create.call_args.kwargs["labels"] is None
 
 
 def test_track_run_logs_params_and_yields_run(fake_aiplatform: MagicMock) -> None:
