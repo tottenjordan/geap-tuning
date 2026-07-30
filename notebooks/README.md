@@ -27,6 +27,7 @@ diagrams.
 | 10 | [`10_doe.ipynb`](10_doe.ipynb) | **Design of experiments (DOE)** — declarative SFT hyperparameter sweep with idempotent reuse; aggregate + chart the runs | [`run_doe.py`](../examples/run_doe.py) |
 | 11 | [`11_multi_run_viz.ipynb`](11_multi_run_viz.ipynb) | **Multi-run visualization** (read-only, no tuning cost) — chart runs already tracked in an Experiment | [`run_multi_run_viz.py`](../examples/run_multi_run_viz.py) |
 | 12 | [`12_doe_dpo_rlft.ipynb`](12_doe_dpo_rlft.ipynb) | **DOE for DPO & RLFT** — the same sweep driver for preference tuning (headline `win_rate`) and reinforcement tuning (declarative reward in `fixed`) | [`run_doe_dpo.py`](../examples/run_doe_dpo.py) / [`run_doe_rlft.py`](../examples/run_doe_rlft.py) |
+| 13 | [`13_rlft_experiment_tracking.ipynb`](13_rlft_experiment_tracking.ipynb) | **RLFT experiment tracking** — the counterpart of **08**: log per-checkpoint offline-eval accuracy to Vertex AI Experiments; opt-in Managed TensorBoard time-series | [`run_rlft_experiment_tracking.py`](../examples/run_rlft_experiment_tracking.py) |
 
 ## Suggested order
 
@@ -39,7 +40,8 @@ tuning run and reuses the checkpoint flow from **04**. **09** applies SFT to
 images. **10** builds on **08** to run a whole SFT hyperparameter sweep as one
 unit, **11** charts a sweep's runs read-only (no tuning cost) — start there if an
 experiment already exists — and **12** runs the same sweep driver for DPO and
-RLFT (read **02**/**03** first).
+RLFT (read **02**/**03** first). **13** is the RLFT counterpart of **08** —
+per-checkpoint offline-eval accuracy logged to Experiments (+ opt-in TensorBoard).
 
 ## Reference
 

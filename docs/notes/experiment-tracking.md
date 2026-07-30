@@ -1,14 +1,17 @@
 # Experiment tracking
 
-How GEAP tracks tuning experiments. Two independent layers — verified 2026-07-29 against
+How GEAP tracks tuning experiments. Two independent layers — verified 2026-07-30 against
 the GEAP docs. See [tuning APIs](tuning-apis.md) for the launch calls these wrap.
 
 **Implemented in this repo:** Layer 2 is wrapped by
 [`src/geap_tuning/experiments.py`](../../src/geap_tuning/experiments.py) (`init_experiment`,
 `get_or_create_tensorboard`, `track_run`, `log_summary_metrics`, `log_timeseries_metrics`,
-`experiment_dataframe`) and demoed by
+`experiment_dataframe`). It is demoed for **SFT** by
 [`examples/run_experiment_tracking.py`](../../examples/run_experiment_tracking.py) /
-[`notebooks/08_experiment_tracking.ipynb`](../../notebooks/08_experiment_tracking.ipynb).
+[`notebooks/08_experiment_tracking.ipynb`](../../notebooks/08_experiment_tracking.ipynb) and,
+identically, for **RLFT** by
+[`examples/run_rlft_experiment_tracking.py`](../../examples/run_rlft_experiment_tracking.py) /
+[`notebooks/13_rlft_experiment_tracking.ipynb`](../../notebooks/13_rlft_experiment_tracking.ipynb).
 Layer 1 needs no code.
 
 ## Layer 1 — built-in tuning metrics (automatic)
@@ -43,6 +46,17 @@ raw calls below one-to-one (`init_experiment` → `aiplatform.init`, `track_run`
 `run_experiment_tracking.py` instead reuses a **single** SFT-with-checkpoints job and derives
 one Experiment run per exported checkpoint (evaluate each, log its accuracy) — cross-run
 comparison without paying for multiple tuning jobs.
+
+**RLFT counterpart:** `run_rlft_experiment_tracking.py` (+ notebook 13) applies the *exact*
+same pattern to RLFT, reusing the same `experiments.py` helpers and the shared
+`geap-tuning-tb` TensorBoard instance. The one difference is where the metric **values** come
+from: RLFT has no gold completion, so per-checkpoint accuracy is our own offline
+`run_rlft_eval` (reward-scored answer correctness), not a job-emitted reward/loss — Layer-1
+RLFT curves stay console-only. It keeps costs down with a cheap `gemini-2.5-flash` job and a
+declarative string-match reward. (Cancellation, if you ever need it, is
+`jobs.cancel_tuning_job` / `cancel_tuning_job_by_display_name` — see
+[endpoints-and-cost.md](endpoints-and-cost.md); jobs aren't deletable, only cancellable while
+non-terminal.)
 
 - SDK-path note: this is the one sanctioned place to mix SDKs. Experiments wraps/orchestrates
   the job; the actual tune call stays on the `genai` path. Not a violation of the repo's
