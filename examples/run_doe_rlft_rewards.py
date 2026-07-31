@@ -66,7 +66,7 @@ EXPERIMENT_NAME = "geap-doe-rlft-rewards"
 DATA_DIR = Path("datasets/rlft_math")
 GCS_PREFIX = "doe_rlft_rewards"
 BASE_MODEL = "gemini-3.5-flash"  # verify region availability before a live run
-PLOT_PATH = Path("doe_rlft_rewards_metrics.png")
+PLOT_PATH = Path("docs/doe/rlft-reward-shapes/metrics.png")
 METRIC = "accuracy"  # headline: reward > 0 ⇒ correct
 
 
