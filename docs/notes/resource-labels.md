@@ -36,6 +36,14 @@ Verified 2026-07-30 against `google-genai` 2.14.0, `google-cloud-aiplatform`
 - **Not logged as Experiments params.** `run_sweep` forwards `labels` to the
   launched jobs but does not log them via `aiplatform.log_params` (that stays
   scalar input hyperparameters only).
+- **DOE-managed labels.** On top of the caller's `labels`, `run_sweep` merges two
+  self-describing labels onto every job it launches (`doe._run_labels`):
+  `tuning_method` (the `SweepConfig.method` **lowercased** — e.g. `rlft` — to
+  satisfy the charset rule above) and `experiment` (the shared Experiment name,
+  only when `run_sweep(..., experiment=...)` is set). The managed keys take
+  precedence over any same-named caller key, so a job's labels always reflect how
+  it was actually launched. This means DOE jobs are labeled even when `cfg.labels`
+  is empty (`tuning_method` is always present).
 
 ## Where it's wired
 

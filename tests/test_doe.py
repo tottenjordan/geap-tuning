@@ -266,7 +266,42 @@ def test_run_sweep_forwards_labels_to_launcher() -> None:
         find_fn=lambda _c, _dn, **_k: None,
         labels={"project": "geap-tuning"},
     )
-    assert seen["labels"] == {"project": "geap-tuning"}
+    # Caller labels are forwarded, plus the DOE-managed ``tuning_method`` (SFT
+    # here, lowercased). No ``experiment`` key since none was passed.
+    assert seen["labels"] == {"project": "geap-tuning", "tuning_method": "sft"}
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_adds_method_and_experiment_labels() -> None:
+    client = MagicMock()
+    seen: dict[str, object] = {}
+
+    def fake_launch(
+        _client: object,
+        _spec: RunSpec,
+        _train: str,
+        _val: str | None,
+        labels: dict[str, str] | None = None,
+    ) -> SimpleNamespace:
+        seen["labels"] = labels
+        return _job()
+
+    run_sweep(
+        client,
+        SweepConfig(name="s", method="RLFT", grid={"epochs": [1]}),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=lambda _ep: {"accuracy": 0.5},
+        launch_fn=fake_launch,
+        wait_fn=lambda _c, _n: _job(),
+        find_fn=lambda _c, _dn, **_k: None,
+        experiment="geap-doe-rlft-rewards",
+        labels={"project": "geap-tuning"},
+    )
+    assert seen["labels"] == {
+        "project": "geap-tuning",
+        "tuning_method": "rlft",  # method lowercased for Vertex label rules
+        "experiment": "geap-doe-rlft-rewards",
+    }
 
 
 @pytest.mark.usefixtures("no_tracking")
@@ -281,7 +316,10 @@ def test_run_sweep_default_launcher_threads_labels_to_tune() -> None:
         find_fn=lambda _c, _dn, **_k: None,
         labels={"project": "geap-tuning"},
     )
-    assert client.tunings.tune.call_args.kwargs["config"].labels == {"project": "geap-tuning"}
+    assert client.tunings.tune.call_args.kwargs["config"].labels == {
+        "project": "geap-tuning",
+        "tuning_method": "sft",
+    }
 
 
 @pytest.mark.usefixtures("no_tracking")

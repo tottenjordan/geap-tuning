@@ -268,6 +268,26 @@ def _scalar_params(params: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in params.items() if isinstance(value, str | int | float)}
 
 
+def _run_labels(
+    sweep: SweepConfig,
+    experiment: str | None,
+    labels: Mapping[str, str] | None,
+) -> dict[str, str]:
+    """Merge DOE-managed labels onto the caller's resource labels.
+
+    Every launched job is tagged with ``tuning_method`` (the sweep method,
+    lowercased to satisfy Vertex label-value rules — lowercase letters, digits,
+    ``_``/``-``) and, when set, ``experiment`` (the shared Experiment name). The
+    caller's ``labels`` (e.g. ``cfg.labels``) are the base; the managed keys take
+    precedence so a job's labels always reflect how it was actually launched.
+    """
+    merged = dict(labels or {})
+    merged["tuning_method"] = sweep.method.lower()
+    if experiment is not None:
+        merged["experiment"] = experiment
+    return merged
+
+
 def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver testable
     client: Any,  # noqa: ANN401 - SDK client type is dynamic
     sweep: SweepConfig,
@@ -291,16 +311,19 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     Vertex AI Experiments (the caller must have called
     :func:`geap_tuning.experiments.init_experiment` first). ``labels`` are
     resource labels forwarded to each launched tuning job (and its generated
-    Model/Endpoint); they are not logged as Experiments params. Returns one
-    :class:`RunResult` per spec, ready for :func:`aggregate_results` /
-    :func:`select_best_run`.
+    Model/Endpoint), merged with two DOE-managed labels — ``tuning_method`` (the
+    lowercased sweep method) and ``experiment`` (when set) — so every job is
+    self-describing in the console; none of these are logged as Experiments
+    params. Returns one :class:`RunResult` per spec, ready for
+    :func:`aggregate_results` / :func:`select_best_run`.
     """
     launch = launch_fn or _LAUNCHERS[sweep.method]
+    run_labels = _run_labels(sweep, experiment, labels)
     results: list[RunResult] = []
     for spec in build_run_specs(sweep):
         existing = find_fn(client, spec.display_name)
         reused = existing is not None
-        job = existing if reused else launch(client, spec, train_uri, val_uri, labels)
+        job = existing if reused else launch(client, spec, train_uri, val_uri, run_labels)
         job = wait_fn(client, job.name)
         endpoint = tuned_endpoint(job)
         metrics = evaluate_fn(endpoint)
