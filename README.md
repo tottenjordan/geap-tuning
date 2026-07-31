@@ -411,7 +411,11 @@ runs are in [`examples/run_doe.py`](examples/run_doe.py) /
 [`examples/run_doe_dpo.py`](examples/run_doe_dpo.py) +
 [`examples/run_doe_rlft.py`](examples/run_doe_rlft.py) /
 [`notebooks/12_doe_dpo_rlft.ipynb`](notebooks/12_doe_dpo_rlft.ipynb) (DPO & RLFT — DPO
-headlines `win_rate`, RLFT carries its reward in `sweep.fixed`); the read-only
+headlines `win_rate`, RLFT carries its reward in `sweep.fixed`), and
+[`examples/run_doe_rlft_rewards.py`](examples/run_doe_rlft_rewards.py) /
+[`notebooks/15_doe_reward_types.ipynb`](notebooks/15_doe_reward_types.ipynb) (RLFT
+**reward-shape** sweep — string-match vs. code-exec vs. autorater vs. composite, each a
+single-run sweep in `sweep.fixed`, vs. an untuned baseline); the read-only
 [`run_multi_run_viz.py`](examples/run_multi_run_viz.py) /
 [`notebooks/11_multi_run_viz.ipynb`](notebooks/11_multi_run_viz.ipynb) chart an existing
 experiment at **zero tuning cost**. See

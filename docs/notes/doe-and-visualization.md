@@ -13,7 +13,10 @@ sweep logs each run there) and [checkpointing](checkpoints-and-continuous-tuning
 [`examples/run_doe_dpo.py`](../../examples/run_doe_dpo.py) +
 [`examples/run_doe_rlft.py`](../../examples/run_doe_rlft.py) /
 [`notebooks/12_doe_dpo_rlft.ipynb`](../../notebooks/12_doe_dpo_rlft.ipynb) (DPO &
-RLFT sweeps), and the read-only
+RLFT hyperparameter sweeps),
+[`examples/run_doe_rlft_rewards.py`](../../examples/run_doe_rlft_rewards.py) /
+[`notebooks/15_doe_reward_types.ipynb`](../../notebooks/15_doe_reward_types.ipynb)
+(RLFT **reward-shape** sweep vs. an untuned baseline), and the read-only
 [`examples/run_multi_run_viz.py`](../../examples/run_multi_run_viz.py) /
 [`notebooks/11_multi_run_viz.ipynb`](../../notebooks/11_multi_run_viz.ipynb) (charts
 an already-tracked experiment — **zero tuning cost**).
@@ -76,6 +79,35 @@ Experiments logging, routed through [`experiments.py`](../../src/geap_tuning/exp
   `sweep.fixed`** (a declarative string-match reward here), and is **preflighted**
   once with `validate_reward_config` before the sweep spends money. Base model is
   `gemini-3.5-flash` (regional client only — the global endpoint excludes tuning).
+
+## Sweeping the reward *shape* (RLFT)
+
+`examples/run_doe_rlft_rewards.py` / `notebooks/15_doe_reward_types.ipynb` sweep the
+axis unique to RLFT — the reward **function** itself (string-match, code-execution,
+autorater, composite) — rather than a hyperparameter. Two constraints shape how:
+
+- **The reward can't be a grid axis.** A `reward_config` is a non-scalar object, so
+  it must ride in `sweep.fixed`, never `grid` (see the gotcha below). That means each
+  reward shape is its **own single-run `SweepConfig`** (empty grid → one run), all
+  pointed at one shared Experiment.
+- **Combine results under driver-owned labels, not `spec.name`.** Every empty-grid
+  `RunSpec.name` slugs to `"default"`, so `aggregate_results` (keyed by name) would
+  collide across shapes. The driver keeps its own `label → RunResult` mapping and
+  hand-builds the comparison rows (`{"run": label, "accuracy": ...}`) — which is
+  exactly the shape `plot_metric_bars(rows, metric="accuracy")` consumes.
+- **Idempotency still holds** because each shape has a distinct `sweep.name`
+  (`rew-string-match`, `rew-code-exec`, …) → distinct display name
+  `geap-doe-rew-<shape>-default`, so reruns reuse jobs.
+- **Untuned baseline needs a global inference client.** The before→after story adds
+  the untuned `gemini-3.5-flash` scored on the same split; Gemini 3.x *inference*
+  runs on the `global` endpoint, so the baseline uses
+  `genai_client(cfg, base_model=BASE_MODEL)` — a separate client from the regional
+  tuning one. The baseline is offline-only (not logged as an Experiments run).
+- **Autorater needs a fully-qualified judge path.** `build_autorater_reward_config`
+  requires `autorater_model="projects/<p>/locations/<l>/publishers/google/models/<m>"`;
+  bare names fail with an opaque "Internal error occurred for computing reward".
+
+No `doe.py` change was needed — this is entirely a composition of existing seams.
 
 ## Visualization module (`viz.py`)
 
