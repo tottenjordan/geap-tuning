@@ -235,3 +235,17 @@ def test_launch_rlft_job_evaluate_interval_defaults_none() -> None:
     client = MagicMock()
     launch_rlft_job(client, train_uri="gs://b/t.jsonl", display_name="d")
     assert client.tunings.tune.call_args.kwargs["config"].evaluate_interval is None
+
+
+def test_launch_rlft_job_threads_labels() -> None:
+    client = MagicMock()
+    launch_rlft_job(
+        client, train_uri="gs://b/t.jsonl", display_name="d", labels={"project": "geap-tuning"}
+    )
+    assert client.tunings.tune.call_args.kwargs["config"].labels == {"project": "geap-tuning"}
+
+
+def test_launch_rlft_job_labels_default_none() -> None:
+    client = MagicMock()
+    launch_rlft_job(client, train_uri="gs://b/t.jsonl", display_name="d")
+    assert client.tunings.tune.call_args.kwargs["config"].labels is None

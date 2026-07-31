@@ -112,6 +112,7 @@ def _run_experiment(
     *,
     train_uri: str,
     val_uri: str,
+    labels: dict[str, str] | None = None,
 ) -> Any:  # noqa: ANN401 - returns the SDK tuning job
     """Reuse-or-launch one SFT job for ``experiment`` and wait for completion."""
     display_name = f"geap-sft-vision-{experiment['name']}"
@@ -126,6 +127,7 @@ def _run_experiment(
             epochs=experiment["epochs"],
             adapter_size=experiment["adapter_size"],
             learning_rate_multiplier=experiment["learning_rate_multiplier"],
+            labels=labels,
         )
         print(f"[{experiment['name']}] launched {job.name}")
     else:
@@ -173,7 +175,7 @@ def main() -> None:
 
     cfg = load_config()
     client = genai_client(cfg)
-    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
+    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
 
     # 1. Acquire the raw dataset (Kaggle download unless a local root is given).
     source_dir = args.data_dir or download_dataset()
@@ -201,6 +203,7 @@ def main() -> None:
             experiment,
             train_uri=jsonl_uris["train"],
             val_uri=jsonl_uris["val"],
+            labels=cfg.labels,
         )
         endpoint = tuned_endpoint(job)
         endpoints[experiment["name"]] = endpoint

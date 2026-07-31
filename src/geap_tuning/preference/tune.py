@@ -37,6 +37,7 @@ def launch_preference_job(  # noqa: PLR0913 - explicit tuning hyperparameters, a
     export_last_checkpoint_only: bool = False,
     evaluation_config: types.EvaluationConfig | None = None,
     pre_tuned_model_checkpoint_id: str | None = None,
+    labels: dict[str, str] | None = None,
 ) -> Any:  # noqa: ANN401 - SDK returns a dynamically-typed TuningJob
     """Submit a DPO job and return the created tuning job.
 
@@ -55,6 +56,10 @@ def launch_preference_job(  # noqa: PLR0913 - explicit tuning hyperparameters, a
     ``docs/notes/checkpoints-and-continuous-tuning.md``). Like SFT, DPO has **no**
     ``evaluate_interval`` — that field is RLFT-only in google-genai 2.14.0 (it
     serializes under the reinforcement spec, so passing it here 400s).
+
+    ``labels`` behaves as in :func:`launch_sft_job`: resource labels on the job
+    that propagate to the generated Model/Endpoint; ``None`` omits the field.
+    See ``docs/notes/resource-labels.md``.
     """
     config = types.CreateTuningJobConfig(
         method="PREFERENCE_TUNING",
@@ -67,6 +72,7 @@ def launch_preference_job(  # noqa: PLR0913 - explicit tuning hyperparameters, a
         export_last_checkpoint_only=export_last_checkpoint_only,
         evaluation_config=evaluation_config,
         pre_tuned_model_checkpoint_id=pre_tuned_model_checkpoint_id,
+        labels=labels,
     )
     return client.tunings.tune(
         base_model=base_model,

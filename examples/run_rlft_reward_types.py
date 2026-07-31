@@ -82,7 +82,7 @@ def main(*, preflight_only: bool = False) -> None:
     """
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
-    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
+    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
 
     # 1. Build the local dataset splits and one preflight record.
     paths = build_rlft_dataset(DATA_DIR)
@@ -149,6 +149,7 @@ def main(*, preflight_only: bool = False) -> None:
             display_name=DISPLAY_NAME,
             base_model=BASE_MODEL,
             composite_reward_config=composite,
+            labels=cfg.labels,
         )
         print(f"Launched composite-reward tuning job: {job.name}")
     else:

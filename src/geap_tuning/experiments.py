@@ -59,12 +59,17 @@ def get_or_create_tensorboard(
     *,
     project: str,
     location: str,
+    labels: dict[str, str] | None = None,
 ) -> str:
     """Return the resource name of a Managed TensorBoard, reusing one by display name.
 
     Mirrors ``find_tuning_job_by_display_name`` for cost control: reuse an
     existing instance instead of provisioning (and paying for) a duplicate.
-    Only needed on the opt-in time-series path.
+    Only needed on the opt-in time-series path. ``labels`` are resource labels
+    applied only when a new instance is created (a reused one keeps its existing
+    labels); ``None`` omits the field. Unlike tuning jobs, ``aiplatform.init`` /
+    ``start_run`` accept no label param, so TensorBoard is the only Experiments
+    resource that can be labeled here. See ``docs/notes/resource-labels.md``.
     """
     for tb in aiplatform.Tensorboard.list(project=project, location=location):
         if tb.display_name == display_name:
@@ -73,6 +78,7 @@ def get_or_create_tensorboard(
         display_name=display_name,
         project=project,
         location=location,
+        labels=labels,
     )
     return created.resource_name
 

@@ -41,6 +41,7 @@ def launch_sft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all keyw
     export_last_checkpoint_only: bool = False,
     evaluation_config: types.EvaluationConfig | None = None,
     pre_tuned_model_checkpoint_id: str | None = None,
+    labels: dict[str, str] | None = None,
 ) -> Any:  # noqa: ANN401 - SDK returns a dynamically-typed TuningJob
     """Submit an SFT job and return the created tuning job.
 
@@ -65,6 +66,12 @@ def launch_sft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all keyw
     on an SFT job makes the request set two ``tuning_spec`` oneof members and the
     API rejects it (400 ``INVALID_ARGUMENT``). ``evaluate_interval`` is therefore
     RLFT-only — see :func:`geap_tuning.rlft.tune.launch_rlft_job`.
+
+    ``labels`` are resource labels attached to the tuning job; GEAP propagates
+    them to the generated Model and Endpoint too. ``None`` (the default) omits
+    the field. Labels are only accepted on the Vertex/GEAP path (this repo);
+    they raise ``ValueError`` in Developer-API mode. See
+    ``docs/notes/resource-labels.md``.
     """
     config = types.CreateTuningJobConfig(
         tuned_model_display_name=display_name,
@@ -75,6 +82,7 @@ def launch_sft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all keyw
         export_last_checkpoint_only=export_last_checkpoint_only,
         evaluation_config=evaluation_config,
         pre_tuned_model_checkpoint_id=pre_tuned_model_checkpoint_id,
+        labels=labels,
     )
     return client.tunings.tune(
         base_model=base_model,

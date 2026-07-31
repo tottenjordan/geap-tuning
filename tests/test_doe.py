@@ -219,7 +219,11 @@ def test_run_sweep_launches_when_absent_and_passes_params() -> None:
     seen: dict[str, object] = {}
 
     def fake_launch(
-        _client: object, spec: RunSpec, _train: str, _val: str | None
+        _client: object,
+        spec: RunSpec,
+        _train: str,
+        _val: str | None,
+        _labels: dict[str, str] | None = None,
     ) -> SimpleNamespace:
         seen["params"] = spec.params
         return _job()
@@ -235,6 +239,49 @@ def test_run_sweep_launches_when_absent_and_passes_params() -> None:
     )
     assert seen["params"] == {"epochs": 2, "adapter_size": 8}
     assert results[0].reused is False
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_forwards_labels_to_launcher() -> None:
+    client = MagicMock()
+    seen: dict[str, object] = {}
+
+    def fake_launch(
+        _client: object,
+        _spec: RunSpec,
+        _train: str,
+        _val: str | None,
+        labels: dict[str, str] | None = None,
+    ) -> SimpleNamespace:
+        seen["labels"] = labels
+        return _job()
+
+    run_sweep(
+        client,
+        SweepConfig(name="s", grid={"epochs": [1]}),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=lambda _ep: {"accuracy": 0.5},
+        launch_fn=fake_launch,
+        wait_fn=lambda _c, _n: _job(),
+        find_fn=lambda _c, _dn, **_k: None,
+        labels={"project": "geap-tuning"},
+    )
+    assert seen["labels"] == {"project": "geap-tuning"}
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_default_launcher_threads_labels_to_tune() -> None:
+    client = MagicMock()
+    run_sweep(
+        client,
+        SweepConfig(name="s", grid={"epochs": [1]}),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=lambda _ep: {"accuracy": 0.5},
+        wait_fn=lambda _c, _n: _job(),
+        find_fn=lambda _c, _dn, **_k: None,
+        labels={"project": "geap-tuning"},
+    )
+    assert client.tunings.tune.call_args.kwargs["config"].labels == {"project": "geap-tuning"}
 
 
 @pytest.mark.usefixtures("no_tracking")

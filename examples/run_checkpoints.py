@@ -49,7 +49,7 @@ def main() -> None:
     """Run the full checkpointing workflow against live GEAP."""
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only
-    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
+    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
 
     # 1. Build and stage the SFT dataset.
     paths = build_sft_dataset(DATA_DIR)
@@ -68,6 +68,7 @@ def main() -> None:
             base_model=BASE_MODEL,
             epochs=EPOCHS,
             export_last_checkpoint_only=False,  # keep every checkpoint (default)
+            labels=cfg.labels,
         )
         print(f"Launched tuning job: {job.name}")
     else:

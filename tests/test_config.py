@@ -40,6 +40,32 @@ def test_missing_bucket_raises() -> None:
         load_config({"PROJECT_ID": "p"})
 
 
+def test_labels_resolved_when_both_env_vars_set() -> None:
+    env = {
+        "PROJECT_ID": "p",
+        "GCS_BUCKET_NAME": "gs://b",
+        "LABEL_KEY": "project",
+        "LABEL_VALUE": "geap-tuning",
+    }
+    assert load_config(env).labels == {"project": "geap-tuning"}
+
+
+def test_labels_empty_when_env_vars_absent() -> None:
+    cfg = load_config({"PROJECT_ID": "p", "GCS_BUCKET_NAME": "gs://b"})
+    assert cfg.labels == {}
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"PROJECT_ID": "p", "GCS_BUCKET_NAME": "gs://b", "LABEL_KEY": "project"},
+        {"PROJECT_ID": "p", "GCS_BUCKET_NAME": "gs://b", "LABEL_VALUE": "geap-tuning"},
+    ],
+)
+def test_labels_empty_when_only_one_env_var_set(env: dict[str, str]) -> None:
+    assert load_config(env).labels == {}
+
+
 @pytest.mark.parametrize(
     ("model", "expected"),
     [

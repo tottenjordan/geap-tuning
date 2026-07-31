@@ -52,7 +52,7 @@ def main() -> None:
     """Run the full RLFT workflow against live GEAP."""
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
-    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
+    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
 
     # 1. Build the local dataset splits.
     paths = build_rlft_dataset(DATA_DIR)
@@ -83,6 +83,7 @@ def main() -> None:
             val_uri=val_uri,
             display_name=DISPLAY_NAME,
             base_model=BASE_MODEL,
+            labels=cfg.labels,
         )
         print(f"Launched tuning job: {job.name}")
     else:

@@ -51,7 +51,7 @@ def main() -> None:
     """Run the full DPO workflow against live GEAP."""
     cfg = load_config()
     client = genai_client(cfg)
-    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket}")
+    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
 
     # 1. Build the local dataset splits.
     paths = build_preference_dataset(DATA_DIR)
@@ -70,6 +70,7 @@ def main() -> None:
             train_uri=train_uri,
             val_uri=val_uri,
             display_name=DISPLAY_NAME,
+            labels=cfg.labels,
         )
         print(f"Launched tuning job: {job.name}")
     else:
