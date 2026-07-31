@@ -42,7 +42,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from geap_tuning.config import genai_client, load_config
+from geap_tuning.config import genai_client, genai_client_for_endpoint, load_config
 from geap_tuning.doe import SweepConfig, run_sweep
 from geap_tuning.experiments import experiment_dataframe, init_experiment
 from geap_tuning.gcs import upload_file
@@ -156,10 +156,13 @@ def main() -> None:
     init_experiment(EXPERIMENT_NAME, project=cfg.project, location=cfg.location)
 
     # 5. Offline scorer: held-out answer accuracy (reward > 0 ⇒ correct). Shared.
+    #    A tuned Gemini 3.x model lands on a us/eu multi-region endpoint, so route
+    #    inference to the endpoint's own location (a us-central1 client 404s it).
     def evaluate_fn(endpoint: str) -> dict[str, object]:
+        eval_client = genai_client_for_endpoint(cfg, endpoint)
         return run_rlft_eval(
             test_records,
-            generate_fn=lambda user_text, e=endpoint: generate(client, e, user_text),
+            generate_fn=lambda user_text, e=endpoint: generate(eval_client, e, user_text),
         )
 
     # 6. Run each reward shape as its own single-run sweep (reuse-or-launch).
