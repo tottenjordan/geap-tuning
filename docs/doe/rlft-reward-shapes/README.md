@@ -53,10 +53,22 @@ already have a finished job.
 
 ### Operational gotchas (learned live)
 
-- **Metric semantics.** The headline `accuracy` is the fraction of held-out
-  problems the tuned model answers **correctly** (offline correctness scorer,
-  reward > 0). A `string-match` model that nails the *format* but not the *math*
-  will therefore score low — that is the finding, not a bug.
+- **Metric semantics — two scores, one generation pass.** The offline eval reports
+  both:
+  - `accuracy` — **reward-based / marker-gated**: correct *and* in the
+    `Answer: <n>` format the reward parser requires (`reward > 0`). This is the
+    output contract the reward trains.
+  - `content_accuracy` — **marker-agnostic**: does the ground-truth number appear
+    anywhere in the reply (`rlft.evaluate.content_correct`)?
+
+  They diverge exactly when a reward shapes *content* but not *format*. Live, the
+  `string-match` model answered every held-out problem **correctly in prose**
+  (`"the sum is **55**"`) but without the `Answer:` marker → `accuracy` = 0.0 while
+  `content_accuracy` = 1.0. So a format-only reward that never enforces the contract
+  can leave the model solving the task yet scoring zero on the marker-gated metric —
+  the DOE's headline finding, and the reason both columns are reported. (Reward
+  shapes whose reward *is* the correctness check — `code-exec`, `composite` — train
+  the marker directly, so their two scores track each other.)
 - **Tuned-endpoint location.** A tuned Gemini 3.x model is deployed to the `us`
   (or `eu`) **multi-region** endpoint, not the `us-central1` region the job ran
   in. Inference must target the endpoint's own location or it 404s — the example
@@ -68,20 +80,23 @@ already have a finished job.
 
 ## Results
 
-> **Status: pending.** Live run in progress (started 2026-07-31). Jobs run
-> sequentially — `string-match` (reused) ✅, `code-exec` (running), then
-> `autorater` and `composite`. `autorater`/`composite` use an LLM-judge reward and
-> are the slow ones. This section will be filled with the final table, the
-> `metrics.png` chart, and the takeaway once all four jobs complete.
+> **Status: partial.** Live run in progress (started 2026-07-31). Jobs run
+> sequentially — `string-match` ✅, `code-exec` (running), then `autorater` and
+> `composite`. This table will be completed once all four jobs finish; the
+> `string-match` row below is measured from its live endpoint.
 
-| Reward shape | Held-out accuracy | vs. untuned |
-|---|---|---|
-| untuned baseline | _pending_ | — |
-| `string-match` | _pending_ | _pending_ |
-| `code-exec` | _pending_ | _pending_ |
-| `autorater` | _pending_ | _pending_ |
-| `composite` | _pending_ | _pending_ |
+| Reward shape | `accuracy` (marker) | `content_accuracy` | vs. untuned |
+|---|---|---|---|
+| untuned baseline | _pending_ | _pending_ | — |
+| `string-match` | 0.000 | 1.000 | _pending_ |
+| `code-exec` | _pending_ | _pending_ | _pending_ |
+| `autorater` | _pending_ | _pending_ | _pending_ |
+| `composite` | _pending_ | _pending_ | _pending_ |
 
-<!-- ![Reward-shape accuracy](metrics.png) -->
+`string-match`'s split scores (`accuracy` 0.0, `content_accuracy` 1.0) are the crux
+of this DOE: the format-only reward left a model that solves every problem but never
+emits the `Answer:` marker. See "Metric semantics" above.
+
+<!-- ![Reward-shape metrics](metrics.png) -->
 
 **Best reward shape:** _pending._

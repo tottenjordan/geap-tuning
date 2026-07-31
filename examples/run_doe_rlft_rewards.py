@@ -67,7 +67,8 @@ DATA_DIR = Path("datasets/rlft_math")
 GCS_PREFIX = "doe_rlft_rewards"
 BASE_MODEL = "gemini-3.5-flash"  # verify region availability before a live run
 PLOT_PATH = Path("docs/doe/rlft-reward-shapes/metrics.png")
-METRIC = "accuracy"  # headline: reward > 0 ⇒ correct
+METRIC = "accuracy"  # headline: reward > 0 ⇒ correct (marker-gated)
+CONTENT_METRIC = "content_accuracy"  # marker-agnostic: right number anywhere in reply
 
 
 def main() -> None:
@@ -179,7 +180,10 @@ def main() -> None:
         )[0]
         results.append((label, result))
         tag = "reused" if result.reused else "launched"
-        print(f"  {label}: accuracy={result.metrics['accuracy']:.3f} ({tag})")
+        print(
+            f"  {label}: {METRIC}={result.metrics[METRIC]:.3f} "
+            f"{CONTENT_METRIC}={result.metrics[CONTENT_METRIC]:.3f} ({tag})"
+        )
 
     # 7. Untuned baseline through a global-routed inference client (3.x inference).
     base_client = genai_client(cfg, base_model=BASE_MODEL)
@@ -187,23 +191,31 @@ def main() -> None:
         test_records,
         generate_fn=lambda user_text: generate(base_client, BASE_MODEL, user_text),
     )
-    print(f"  untuned baseline: accuracy={baseline['accuracy']:.3f}")
+    print(
+        f"  untuned baseline: {METRIC}={baseline[METRIC]:.3f} "
+        f"{CONTENT_METRIC}={baseline[CONTENT_METRIC]:.3f}"
+    )
 
     # 8. Combine into driver-labeled rows (bypassing aggregate_results, whose keys
-    #    would all be "default"); report the best tuned shape over the baseline.
-    rows = [{"run": "untuned", METRIC: baseline[METRIC]}]
-    rows += [{"run": label, METRIC: result.metrics[METRIC]} for label, result in results]
+    #    would all be "default"). Two metrics per run: reward-based accuracy (marker
+    #    contract) and marker-agnostic content_accuracy (right number in prose) — a
+    #    format-only reward can leave the first low while the second stays high.
+    def _row(run: str, metrics: dict[str, object]) -> dict[str, object]:
+        return {"run": run, METRIC: metrics[METRIC], CONTENT_METRIC: metrics[CONTENT_METRIC]}
+
+    rows = [_row("untuned", baseline)]
+    rows += [_row(label, result.metrics) for label, result in results]
     best_label, best_result = max(results, key=lambda lr: lr[1].metrics[METRIC])
     print("\nCross-reward comparison:")
     for row in rows:
         print(f"  {row}")
     print(f"\nBest reward shape ({METRIC}): {best_label} = {best_result.metrics[METRIC]:.3f}")
 
-    # 9. Optional chart (needs the viz group).
+    # 9. Optional chart (needs the viz group): grouped bars for both metrics.
     if plot:
-        from geap_tuning.viz import plot_metric_bars  # noqa: PLC0415 - opt-in dep
+        from geap_tuning.viz import plot_grouped_metric_bars  # noqa: PLC0415 - opt-in dep
 
-        fig = plot_metric_bars(rows, metric=METRIC)
+        fig = plot_grouped_metric_bars(rows, metrics=(METRIC, CONTENT_METRIC))
         fig.savefig(PLOT_PATH, bbox_inches="tight")
         print(f"Saved chart to {PLOT_PATH}")
 

@@ -93,8 +93,18 @@ autorater, composite) — rather than a hyperparameter. Two constraints shape ho
 - **Combine results under driver-owned labels, not `spec.name`.** Every empty-grid
   `RunSpec.name` slugs to `"default"`, so `aggregate_results` (keyed by name) would
   collide across shapes. The driver keeps its own `label → RunResult` mapping and
-  hand-builds the comparison rows (`{"run": label, "accuracy": ...}`) — which is
-  exactly the shape `plot_metric_bars(rows, metric="accuracy")` consumes.
+  hand-builds the comparison rows (`{"run": label, "accuracy": ..., "content_accuracy":
+  ...}`) — the shape `plot_grouped_metric_bars(rows, metrics=(...))` consumes.
+- **Report two metrics, because reward shape decides whether the output contract is
+  learned.** `run_rlft_eval` returns both `accuracy` (reward-based, requires the
+  `Answer: <n>` marker) and `content_accuracy` (marker-agnostic — is the right number
+  anywhere in the reply, via `rlft.evaluate.content_correct`), from one generation
+  pass. Live, the format-only `string-match` reward produced a model that answered
+  every problem **correctly in prose** but never emitted the marker → `accuracy` 0.0,
+  `content_accuracy` 1.0. Rewards whose signal *is* the correctness check
+  (`code-exec`, `composite`) train the marker directly, so their two scores track.
+  Reporting only the marker-gated `accuracy` would read as "string-match failed" when
+  it actually solved the task — hence both columns and the grouped-bar chart.
 - **Idempotency still holds** because each shape has a distinct `sweep.name`
   (`rew-string-match`, `rew-code-exec`, …) → distinct display name
   `geap-doe-rew-<shape>-default`, so reruns reuse jobs.
