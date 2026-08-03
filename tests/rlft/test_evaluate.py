@@ -1,6 +1,12 @@
 """Tests for RLFT offline accuracy evaluation (reuses the training reward)."""
 
-from geap_tuning.rlft.evaluate import content_correct, run_rlft_eval, score_accuracy
+from geap_tuning.rlft.evaluate import (
+    bootstrap_ci,
+    content_correct,
+    run_rlft_eval,
+    run_rlft_multimetric_eval,
+    score_accuracy,
+)
 
 
 def test_score_accuracy() -> None:
@@ -89,3 +95,96 @@ def test_run_rlft_eval_forwards_system_instruction() -> None:
 
     run_rlft_eval(records, generate_fn=generate_fn)
     assert seen == ["End with 'Answer: <number>'.", None]
+
+
+def test_run_rlft_eval_format_rate_counts_markers_regardless_of_correctness() -> None:
+    # format_rate credits a parseable "Answer:" marker even when the number is wrong,
+    # and withholds credit when the correct number is stated only in prose.
+    records = [
+        {
+            "contents": [{"role": "user", "parts": [{"text": "2+2?"}]}],
+            "references": {"ground_truth_answer": "4"},
+        },
+        {
+            "contents": [{"role": "user", "parts": [{"text": "3+3?"}]}],
+            "references": {"ground_truth_answer": "6"},
+        },
+    ]
+    replies = iter(["Answer: 99", "The total is 6."])
+    metrics = run_rlft_eval(records, generate_fn=lambda _u, _s=None: next(replies))
+    assert metrics["format_rate"] == 0.5  # only the (wrong) marker reply counts
+    assert metrics["format_count"] == 1
+    assert metrics["accuracy"] == 0.0  # neither is both correct AND marked
+    assert metrics["content_accuracy"] == 0.5  # the prose "6" is content-correct
+
+
+def test_run_rlft_multimetric_eval_reports_all_axes_and_tiers() -> None:
+    records = [
+        {
+            "contents": [{"role": "user", "parts": [{"text": "2+2?"}]}],
+            "references": {"ground_truth_answer": "4", "difficulty": "easy"},
+        },
+        {
+            "contents": [{"role": "user", "parts": [{"text": "sum 1..10?"}]}],
+            "references": {"ground_truth_answer": "55", "difficulty": "hard"},
+        },
+    ]
+    # First: correct + marker. Second: correct in prose, no marker.
+    replies = iter(["Answer: 4", "The sum is **55**."])
+    metrics = run_rlft_multimetric_eval(
+        records,
+        generate_fn=lambda _u, _s=None: next(replies),
+        judge_fn=lambda _q, _r, _t: 0.75,
+    )
+    assert metrics["n"] == 2
+    assert metrics["correctness"] == 1.0  # both right (marker-agnostic)
+    assert metrics["format_rate"] == 0.5  # only the first has a marker
+    assert metrics["marker_accuracy"] == 0.5  # correct AND marked
+    assert metrics["explanation_quality"] == 0.75
+    assert metrics["by_difficulty"]["easy"] == {"correctness": 1.0, "n": 1}
+    assert metrics["by_difficulty"]["hard"] == {"correctness": 1.0, "n": 1}
+
+
+def test_run_rlft_multimetric_eval_omits_quality_without_judge() -> None:
+    records = [
+        {
+            "contents": [{"role": "user", "parts": [{"text": "2+2?"}]}],
+            "references": {"ground_truth_answer": "4", "difficulty": "easy"},
+        },
+    ]
+    metrics = run_rlft_multimetric_eval(records, generate_fn=lambda _u, _s=None: "Answer: 4")
+    assert "explanation_quality" not in metrics
+
+
+def test_run_rlft_multimetric_eval_forwards_system_instruction_and_judge_inputs() -> None:
+    records = [
+        {
+            "contents": [{"role": "user", "parts": [{"text": "2+2?"}]}],
+            "systemInstruction": {"parts": [{"text": "Think step by step."}]},
+            "references": {"ground_truth_answer": "4", "difficulty": "easy"},
+        },
+    ]
+    seen_sys: list[str | None] = []
+    seen_judge: list[tuple[str, str, str]] = []
+
+    def generate_fn(_user: str, system_instruction: str | None) -> str:
+        seen_sys.append(system_instruction)
+        return "Answer: 4"
+
+    def judge_fn(question: str, reply: str, truth: str) -> float:
+        seen_judge.append((question, reply, truth))
+        return 1.0
+
+    run_rlft_multimetric_eval(records, generate_fn=generate_fn, judge_fn=judge_fn)
+    assert seen_sys == ["Think step by step."]
+    assert seen_judge == [("2+2?", "Answer: 4", "4")]
+
+
+def test_bootstrap_ci_is_seed_deterministic_and_bounded() -> None:
+    # Bounds lie within [0, 1], bracket the point estimate, and are reproducible.
+    low, high = bootstrap_ci(7, 10, seed=123)
+    assert 0.0 <= low <= 0.7 <= high <= 1.0
+    assert bootstrap_ci(7, 10, seed=123) == (low, high)
+    # Degenerate cases: all-hit collapses to 1.0, empty set is (0, 0).
+    assert bootstrap_ci(5, 5, seed=1) == (1.0, 1.0)
+    assert bootstrap_ci(0, 0, seed=1) == (0.0, 0.0)

@@ -14,6 +14,12 @@ baseline**, so the before→after lift is explicit.
 - **Experiment:** `geap-doe-rlft-rewards`
 - **Framework mechanics:** [`../../notes/doe-and-visualization.md` → "Sweeping the reward *shape* (RLFT)"](../../notes/doe-and-visualization.md#sweeping-the-reward-shape-rlft)
 
+> **This sweep is the cautionary tale — it does *not* rank (see the null result
+> below).** For a version engineered to actually rank the reward shapes — harder
+> tiered bank, weaker base, neutral (marker-free) instruction, multi-axis
+> leaderboard with bootstrap CIs, and a pilot headroom gate — see
+> [`../rlft-reward-ranking/`](../rlft-reward-ranking/README.md).
+
 ## The four reward shapes
 
 | Label | `sweep.fixed` payload | What it rewards |

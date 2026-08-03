@@ -119,6 +119,48 @@ autorater, composite) — rather than a hyperparameter. Two constraints shape ho
 
 No `doe.py` change was needed — this is entirely a composition of existing seams.
 
+### Making a reward-shape sweep actually *rank* (the ranking variant)
+
+The sweep above returned a **flat null result** — every shape *and* the untuned
+baseline scored 1.000 on both metrics — so `max(accuracy)` picked a "winner" only as
+a tie-break. That is a **design** failure, not a mechanics one: the sweep machinery
+worked, the *experiment* had nothing to measure.
+`examples/run_doe_rlft_reward_ranking.py` / `notebooks/16_doe_reward_ranking.ipynb`
+fix the design (same orchestration, no `doe.py` change) and are the pattern to copy
+for a rank-capable reward sweep. The requirements:
+
+- **Give every objective headroom.** A reward-shape sweep only discriminates when the
+  base model *can't already* do the task. Three levers, all in the new
+  `rlft/bench.py`: a harder, **difficulty-tiered** bank (`HARD_MATH_PROBLEMS`, 150
+  multi-step problems, computed answers), a **weaker base** (`gemini-2.5-flash-lite`,
+  not `gemini-3.5-flash`), and a **neutral system instruction**
+  (`NEUTRAL_SYSTEM_INSTRUCTION`) that **drops the `Answer: <n>` contract** — without
+  which the base emits the marker for free and the format-only `string-match` reward
+  has nothing to teach.
+- **Gate on headroom before spending.** Score the untuned base first and refuse to
+  launch the four jobs unless correctness is below ceiling *and* the marker rate is
+  low. A reward-shape DOE that skips this is a spend-first, not an experiment.
+- **Measure each objective on its own axis.** Different rewards optimize different
+  things, so one headline can't rank them. `run_rlft_multimetric_eval` returns
+  `correctness` (marker-agnostic, primary), `format_rate` (marker present regardless
+  of correctness — the `string-match` axis), `explanation_quality` (an **offline LLM
+  judge**, which must be a *different* model than any training autorater or it grades
+  with the trainer), plus a per-tier correctness breakdown — all from one generation
+  pass.
+- **Rank with a confidence interval, not `max`.** `evaluate.bootstrap_ci(hits, n)` is
+  a seeded, stdlib-only bootstrap of the proportion, so "best shape" is reported with
+  whether the gap over the runner-up / baseline is significant. Even n≈30 gives wide
+  CIs on a binary metric — if axes still overlap, add test items before believing a
+  ranking.
+- **Non-scalar metrics are dropped from Experiments automatically.** The multimetric
+  dict carries a nested `by_difficulty`; `doe._numeric_metrics` keeps only scalar
+  numeric values, so it logs the axes and ignores the nested breakdown — no change
+  needed.
+
+The original saturating sweep is kept as the cautionary tale
+(`docs/doe/rlft-reward-shapes/`); the ranking variant lives at
+`docs/doe/rlft-reward-ranking/`.
+
 ## Visualization module (`viz.py`)
 
 matplotlib + pandas live in the optional **`viz`** group (`uv sync --group viz`)
