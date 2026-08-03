@@ -327,6 +327,23 @@ GEAP tracks tuning experiments at two levels — one you get for free, one you o
 Every Gemini tuning job launched here — SFT, DPO, and RLFT — automatically emits
 training/validation metrics that stream to the Cloud console in real time. View them
 under **Agent Platform Studio → Tune and Distill → _your tuned model_ → Monitor tab**.
+
+![GEAP tuning Monitor tab in the Cloud console for an SFT job: a "Tuning progress" bar showing 100% completed, three live metric charts (Accuracy, Number of predictions, Loss) each plotting the blue training curve against the pink validation curve over training steps with numbered per-epoch checkpoint markers and a starred default checkpoint, and a Checkpoints table listing each checkpoint's step, epoch, pre-deployed endpoint, and training/validation accuracy.](docs/imgs/sft-monitoring.png)
+
+The Monitor tab is **live tuning-progress monitoring with zero code** — it appears the
+moment the job starts and needs nothing beyond launching it. It gives you:
+
+- **Progress** — a status (`Running` / `Succeeded`) and a percent-complete bar, so you
+  can watch a long job advance without polling the SDK.
+- **Metric curves** — training (blue) vs. validation (pink) plotted over training steps,
+  so overfitting shows up as the two curves diverging. The exact metrics depend on the
+  method (table below).
+- **Per-epoch checkpoints** — numbered markers on each chart (and a starred **default
+  checkpoint**) line up the curves with the exported checkpoints, and the **Checkpoints
+  table** underneath lists every checkpoint's step, epoch, pre-deployed endpoint, and
+  train/validation accuracy — letting you eyeball which checkpoint peaked before you pick
+  one as the default (see [Checkpointing & continuous tuning](#checkpointing--continuous-tuning)).
+
 The metric set depends on the method:
 
 | Method | Training metrics | Validation metrics (only if a validation set is provided) |
