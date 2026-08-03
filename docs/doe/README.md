@@ -17,7 +17,7 @@ the **Writeup** column links the ones that have landed.
 | DPO hyperparameters | Which `beta` × `epochs` wins the most A/B judgments? | `examples/run_doe_dpo.py` | `notebooks/12_doe_dpo_rlft.ipynb` | _pending live run_ |
 | RLFT hyperparameters | Which `epochs` × `samples_per_prompt` maximizes reward accuracy? | `examples/run_doe_rlft.py` | `notebooks/12_doe_dpo_rlft.ipynb` | _pending live run_ |
 | **RLFT reward shapes** | Which **reward function** produces the most accurate math model? | `examples/run_doe_rlft_rewards.py` | `notebooks/15_doe_reward_types.ipynb` | [rlft-reward-shapes](rlft-reward-shapes/README.md) (null result — the cautionary tale) |
-| **RLFT reward ranking** | Same question, re-engineered to actually *rank* (headroom + multi-axis + CIs) | `examples/run_doe_rlft_reward_ranking.py` | `notebooks/16_doe_reward_ranking.ipynb` | [rlft-reward-ranking](rlft-reward-ranking/README.md) (pilot ran — gate fired, launch deferred until the bank is harder) |
+| **RLFT reward ranking** | Same question, re-engineered to actually *rank* (headroom + multi-axis + CIs) | `examples/run_doe_rlft_reward_ranking.py` | `notebooks/16_doe_reward_ranking.ipynb` | [rlft-reward-ranking](rlft-reward-ranking/README.md) (pilot ran — gate fired on v1 bank; bank hardened, re-pilot pending) |
 
 ## Layout convention
 

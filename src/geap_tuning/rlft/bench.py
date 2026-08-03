@@ -5,8 +5,17 @@ result that dataset produced (every reward shape *and* the untuned baseline scor
 1.000 — see ``docs/doe/rlft-reward-shapes/README.md``). Three deliberate changes
 give a reward-shape sweep something to measure:
 
-1. **Headroom** — problems are multi-step and split across ``easy``/``medium``/
-   ``hard`` tiers, so a *weaker* base model does **not** saturate the task.
+1. **Headroom** — problems are split across ``easy``/``medium``/``hard`` tiers of
+   escalating difficulty, so a *weaker* base model does **not** saturate the task.
+   ``easy`` is a near-ceiling **control** (grade-school arithmetic); ``medium`` is
+   genuinely multi-step (two-unknown systems, chained percentage changes, combined
+   work rates); ``hard`` is **number theory / combinatorics / series** — modular
+   exponentiation, constrained combinations, geometric-series sums — the categories
+   small models reliably miss. Hard answers are deliberately **large** (three-plus
+   digits) so the marker-agnostic correctness check (which matches the ground-truth
+   number *anywhere* in the reply) is not spuriously satisfied by an incidental digit
+   in the model's prose. An earlier all-arithmetic bank saturated even at the ``hard``
+   tier (see ``docs/doe/rlft-reward-ranking/README.md``), which motivated this mix.
 2. **A larger held-out set** — a ~150-problem bank with a stratified split yields
    a test set of ~30, enough for a bootstrap confidence interval to mean something.
 3. **Format headroom** — :data:`NEUTRAL_SYSTEM_INSTRUCTION` deliberately **omits**
@@ -23,6 +32,7 @@ is stable across runs and processes.
 
 from __future__ import annotations
 
+import math
 import random
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
@@ -106,77 +116,94 @@ def _easy_wage(rng: random.Random) -> tuple[str, float]:
     return question, rate * hours - fee
 
 
-def _medium_tank(rng: random.Random) -> tuple[str, float]:
-    capacity = rng.choice([200, 300, 400, 500, 600, 800])
-    percent = rng.choice([10, 20, 25, 40, 50, 60, 75])
-    added = rng.randint(10, 60)
+# Medium: genuinely multi-step, but still elementary arithmetic. A weaker base
+# should clear some of these, leaving partial headroom the correctness axis can show.
+
+
+def _medium_ticket_system(rng: random.Random) -> tuple[str, float]:
+    # A two-unknown system, constructed from an integer solution so the answer is exact.
+    adult_price = rng.choice([8, 9, 10, 12, 15])
+    child_price = rng.choice([4, 5, 6, 7])
+    n_adult = rng.randint(30, 95)
+    n_child = rng.randint(30, 95)
+    total_tickets = n_adult + n_child
+    total_revenue = n_adult * adult_price + n_child * child_price
     question = (
-        f"A tank holds {capacity} liters and is {percent}% full. After {added} "
-        f"more liters are added, how many liters are in it?"
+        f"A theater sold {total_tickets} tickets for a total of ${total_revenue}. "
+        f"Adult tickets cost ${adult_price} and child tickets cost ${child_price}. "
+        f"How many adult tickets were sold?"
     )
-    return question, capacity * percent / 100 + added
+    return question, n_adult
 
 
-def _medium_trip(rng: random.Random) -> tuple[str, float]:
-    speed = rng.randint(40, 90)
-    hours = rng.randint(2, 5)
-    extra = rng.randint(15, 120)
+def _medium_percent_chain(rng: random.Random) -> tuple[str, float]:
+    # Three chained percentage operations — error accumulates across the steps.
+    price = rng.choice([120, 150, 180, 200, 240, 300, 360, 420])
+    markup = rng.choice([10, 15, 20, 25])
+    discount = rng.choice([10, 15, 20, 30])
+    tax = rng.choice([5, 8])
     question = (
-        f"A car travels at {speed} km/h for {hours} hours, rests, then drives "
-        f"{extra} km more. What is the total distance in km?"
+        f"A ${price} item is first marked up {markup}%, then discounted {discount}%, "
+        f"then a {tax}% tax is applied. What is the final price in dollars "
+        f"(round to 2 decimals)?"
     )
-    return question, speed * hours + extra
+    return question, price * (1 + markup / 100) * (1 - discount / 100) * (1 + tax / 100)
 
 
-def _medium_discount_ship(rng: random.Random) -> tuple[str, float]:
-    price = rng.choice([80, 120, 160, 200, 240, 400])
-    percent = rng.choice([10, 20, 25, 50, 75])
-    shipping = rng.randint(5, 30)
+def _medium_work_rate(rng: random.Random) -> tuple[str, float]:
+    # Combined work rate: 1 / (1/a + 1/b) = a*b/(a+b); awkward decimal answer.
+    a = rng.randint(4, 12)
+    b = rng.randint(4, 12)
     question = (
-        f"A ${price} item is discounted {percent}%, then ${shipping} shipping is "
-        f"added. What is the total cost in dollars?"
+        f"Worker A finishes a job in {a} hours and worker B finishes the same job in "
+        f"{b} hours. Working together, how many hours do they take "
+        f"(round to 2 decimals)?"
     )
-    return question, price * (1 - percent / 100) + shipping
+    return question, a * b / (a + b)
 
 
-def _hard_discount_tax(rng: random.Random) -> tuple[str, float]:
-    price = rng.choice([120, 150, 180, 240, 320, 450])
-    discount = rng.choice([10, 15, 20, 25])
-    tax = rng.choice([5, 8, 10])
+# Hard: number theory / combinatorics / series. These are the categories small models
+# reliably miss, and their answers are large (3+ digits) so the marker-agnostic
+# correctness check is not accidentally satisfied by a stray digit in the prose.
+
+
+def _hard_modexp(rng: random.Random) -> tuple[str, float]:
+    base = rng.randint(2, 9)
+    exponent = rng.randint(12, 40)
+    question = f"What is the remainder when {base}^{exponent} is divided by 1000?"
+    return question, pow(base, exponent, 1000)
+
+
+def _hard_committee(rng: random.Random) -> tuple[str, float]:
+    women = rng.randint(6, 12)
+    men = rng.randint(6, 12)
+    committee = rng.randint(4, 6)
+    women_required = rng.randint(2, committee - 1)
+    value = math.comb(women, women_required) * math.comb(men, committee - women_required)
     question = (
-        f"A ${price} item is discounted {discount}%, then a {tax}% tax is applied "
-        f"to the discounted price. What is the final price in dollars (2 decimals)?"
+        f"A committee of {committee} people is chosen from {women} women and {men} "
+        f"men. How many possible committees have exactly {women_required} women?"
     )
-    return question, price * (1 - discount / 100) * (1 + tax / 100)
+    return question, value
 
 
-def _hard_combined_average(rng: random.Random) -> tuple[str, float]:
-    n_a = rng.randint(10, 30)
-    avg_a = rng.randint(60, 90)
-    n_b = rng.randint(10, 30)
-    avg_b = rng.randint(60, 90)
+def _hard_geometric_sum(rng: random.Random) -> tuple[str, float]:
+    first = rng.randint(2, 9)
+    ratio = rng.randint(2, 4)
+    terms = rng.randint(6, 12)
+    # Exact integer sum (avoids float error on the large closed-form value).
+    value = sum(first * ratio**i for i in range(terms))
     question = (
-        f"Class A has {n_a} students averaging {avg_a} points; class B has {n_b} "
-        f"students averaging {avg_b} points. What is the combined average of all "
-        f"students (round to 2 decimals)?"
+        f"What is the sum of the first {terms} terms of a geometric sequence whose "
+        f"first term is {first} and whose common ratio is {ratio}?"
     )
-    return question, (n_a * avg_a + n_b * avg_b) / (n_a + n_b)
-
-
-def _hard_compound_growth(rng: random.Random) -> tuple[str, float]:
-    population = rng.choice([1000, 1200, 1500, 2000, 2500, 4000])
-    percent = rng.choice([5, 10, 20, 25])
-    question = (
-        f"A town of {population} people grows {percent}% each year. What is its "
-        f"population after 2 years (round to the nearest whole number)?"
-    )
-    return question, round(population * (1 + percent / 100) ** 2)
+    return question, value
 
 
 _TEMPLATES: dict[str, tuple[Callable[[random.Random], tuple[str, float]], ...]] = {
     "easy": (_easy_boxes, _easy_percent_plus, _easy_wage),
-    "medium": (_medium_tank, _medium_trip, _medium_discount_ship),
-    "hard": (_hard_discount_tax, _hard_combined_average, _hard_compound_growth),
+    "medium": (_medium_ticket_system, _medium_percent_chain, _medium_work_rate),
+    "hard": (_hard_modexp, _hard_committee, _hard_geometric_sum),
 }
 
 _PER_TIER = 50

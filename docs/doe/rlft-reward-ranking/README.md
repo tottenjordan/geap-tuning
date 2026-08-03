@@ -21,7 +21,7 @@ The null result had five root causes; each maps to a fix:
 | Root cause (old sweep) | Fix (this sweep) |
 |---|---|
 | Base aces the task (no headroom) | **Weaker base** — `gemini-2.5-flash-lite`, not `gemini-3.5-flash` |
-| Grade-school, single/two-step problems | **Harder, tiered bank** — `rlft/bench.py`, 150 multi-step problems (easy/medium/hard), answers computed in Python |
+| Grade-school, single/two-step problems | **Harder, tiered bank** — `rlft/bench.py`, 150 problems (50/tier), answers computed in Python: `easy` is a near-ceiling control, `medium` is multi-step arithmetic (two-unknown systems, chained % changes, work rate), `hard` is **number theory / combinatorics / series** (modular exponentiation, constrained combinations, geometric sums) with deliberately **large** answers |
 | `Answer: <n>` marker handed to the model for free | **Neutral system instruction** (`NEUTRAL_SYSTEM_INSTRUCTION`) drops the marker → format headroom |
 | Tiny test set (n=6) | **Stratified split** → test n≈30, balanced across tiers |
 | One binary headline + arbitrary `max` tie-break | **Multi-axis scoring** + **bootstrap 95% CIs** |
@@ -131,9 +131,25 @@ or a domain the base has not memorized — not merely a weaker base.
 launch *would* be expected to separate `string-match` (and `code-exec`, whose reward
 must parse the marker to verify) from `autorater` (which never rewards the marker) on
 that one axis. That is a real but one-dimensional result; the multi-axis ranking the
-design targets needs the harder bank above. **The launch is deferred until the bank
-is hardened** — the orchestration, multi-axis eval, bootstrap CIs, and gate are all
-verified and ready for it.
+design targets needs the harder bank above.
+
+### Update — bank hardened after this pilot
+
+The pilot numbers above describe the **first-iteration** `rlft/bench.py`, whose
+`medium`/`hard` tiers were still elementary word problems (the base cleared them). In
+response, those tiers were replaced (the `easy` tier is kept as a near-ceiling
+control):
+
+- **`medium`** → genuinely multi-step arithmetic: two-unknown ticket systems, three
+  chained percentage changes, combined work rate.
+- **`hard`** → **number theory / combinatorics / series** the base cannot shortcut —
+  modular exponentiation (`b^e mod 1000`), constrained committee combinations
+  (`C(w,j)·C(m,k−j)`), and geometric-series sums. Answers are computed in Python and
+  are deliberately **large** (only 1/50 below 100), so the marker-agnostic
+  correctness check is not spuriously satisfied by a stray digit in the model's prose.
+
+A **fresh pilot on the hardened bank is pending** — if it clears the gate (baseline
+`correctness` < 0.70), the four-job launch and the per-axis leaderboard below follow.
 
 **Expectation still to test (once the bank is hard enough to clear the gate):** each
 shape tops the axis it optimizes — `string-match` on `format_rate`,
