@@ -53,6 +53,19 @@ already have a finished job.
 
 ### Operational gotchas (learned live)
 
+- **Eval must replay the training framing (the biggest one).** These RLFT records
+  are trained under a **system instruction** ("…end with the final answer on its
+  own line as 'Answer: `<number>`'") that carries the very output contract the
+  reward scores. The first version of this eval sent only the bare user question
+  and **dropped that system instruction** — so the model answered in free prose,
+  never emitted the marker, and scored `accuracy` = 0.000 across *every* shape.
+  That was a **measurement artifact, not a training outcome**: an A/B probe of the
+  same `code-exec` endpoint scored 0.000 on bare prompts and 1.000 once the system
+  instruction was restored. The fix (`rlft/evaluate.py`) threads each record's
+  `systemInstruction` through `run_rlft_eval` → `generate_fn`, keeping inference
+  faithful to training. **Lesson: an RLFT eval must reproduce the training prompt
+  exactly — same system instruction, same framing — or it measures the mismatch,
+  not the model.**
 - **Metric semantics — two scores, one generation pass.** The offline eval reports
   both:
   - `accuracy` — **reward-based / marker-gated**: correct *and* in the
@@ -61,15 +74,12 @@ already have a finished job.
   - `content_accuracy` — **marker-agnostic**: does the ground-truth number appear
     anywhere in the reply (`rlft.evaluate.content_correct`)?
 
-  They diverge whenever a model gets the math right but omits the `Answer:` marker.
-  Live, **every** run — the untuned baseline and all four tuned shapes — scored
-  `accuracy` = 0.0 / `content_accuracy` = 1.0: the models answered every held-out
-  problem **correctly in prose** (`"the sum is **55**"`) but none emitted the
-  marker at inference. Reporting both columns is what surfaces this: a single
-  marker-gated number would read as a flat failure, when in fact the content is
-  perfect. (Note this even held for `code-exec`/`composite`, whose reward *is* the
-  marker-gated correctness check — so the marker was reinforced in training yet did
-  not transfer to the marker-free test prompts.)
+  They diverge whenever a model gets the math right but omits the `Answer:` marker
+  — exactly the failure mode the dropped-system-instruction bug above produced
+  (content 1.0, marker 0.0). Once the eval replays the system instruction, both
+  land at 1.0 here, so reporting both columns is what let us catch the artifact:
+  a single marker-gated number would have read as a flat failure while the content
+  was in fact perfect.
 - **Tuned-endpoint location.** A tuned Gemini 3.x model is deployed to the `us`
   (or `eu`) **multi-region** endpoint, not the `us-central1` region the job ran
   in. Inference must target the endpoint's own location or it 404s — the example
@@ -83,38 +93,44 @@ already have a finished job.
 
 > **Status: complete.** All four RLFT jobs finished (`gemini-3.5-flash`,
 > `us-central1`, held-out split of **n = 6**). Scored offline against each tuned
-> endpoint plus the untuned baseline; `content_accuracy` is marker-agnostic.
+> endpoint plus the untuned baseline, **replaying each record's training system
+> instruction** (see the gotcha above); `content_accuracy` is marker-agnostic.
 
 | Reward shape | `accuracy` (marker) | `content_accuracy` | vs. untuned |
 |---|---|---|---|
-| untuned baseline | 0.000 | 1.000 | — |
-| `string-match` | 0.000 | 1.000 | ±0.000 |
-| `code-exec` | 0.000 | 1.000 | ±0.000 |
-| `autorater` | 0.000 | 1.000 | ±0.000 |
-| `composite` | 0.000 | 1.000 | ±0.000 |
+| untuned baseline | 1.000 | 1.000 | — |
+| `string-match` | 1.000 | 1.000 | ±0.000 |
+| `code-exec` | 1.000 | 1.000 | ±0.000 |
+| `autorater` | 1.000 | 1.000 | ±0.000 |
+| `composite` | 1.000 | 1.000 | ±0.000 |
 
-![Reward-shape metrics: a grouped bar chart over untuned/string-match/code-exec/autorater/composite showing content_accuracy at 1.0 for every run and marker-gated accuracy at 0.0 for every run.](metrics.png)
+![Reward-shape metrics: a grouped bar chart over untuned/string-match/code-exec/autorater/composite showing both marker-gated accuracy and content_accuracy at 1.0 for every run.](metrics.png)
 
 ### Read this honestly — it's a null result, and that's the finding
 
-The table is **flat**: every run scores identically (content 1.0, marker 0.0), so
-`max(accuracy)` picks `string-match = 0.000` only as an arbitrary tie-break. There
-is **no best reward shape** here — the DOE did not discriminate. Two reasons, both
-worth internalizing before running a reward-shape sweep:
+The table is **flat**: every run scores 1.000 on both metrics, so `max(accuracy)`
+picks `string-match` only as an arbitrary tie-break. There is **no best reward
+shape** here — the DOE did not discriminate. The reason is worth internalizing
+before running a reward-shape sweep:
 
-1. **The base model already aces the task.** The untuned `gemini-3.5-flash` baseline
-   already scores `content_accuracy` = 1.000 — it solves every held-out problem
-   before any tuning. With no content headroom, no reward shape *can* show lift on
-   this dataset.
-2. **The marker contract never reaches the test.** Marker-gated `accuracy` is 0.000
-   everywhere, including `code-exec`/`composite` (whose reward *is* the marker-gated
-   check). The `Answer: <n>` format the parser needs isn't emitted on the
-   marker-free test prompts — training reinforced it, but it didn't transfer.
+- **The base model already aces the task — content *and* format.** Given the same
+  system instruction it was tuned under, the untuned `gemini-3.5-flash` baseline
+  already scores `accuracy` = 1.000 *and* `content_accuracy` = 1.000: it solves
+  every held-out problem **and** emits the `Answer: <n>` marker before any tuning.
+  With no headroom on either axis, no reward shape *can* show lift on this dataset.
 
-**Methodology takeaway:** a reward-shape DOE only measures something when the task
-has genuine content headroom for the base model *and* the eval prompt matches the
-output contract the reward trains (here, ask for the `Answer:` marker, or score
-correctness marker-agnostically as `content_accuracy` does). The small split
-(n = 6) compounds both effects. The mechanics this example demonstrates (per-shape
-single-run sweeps, driver-owned labels, idempotent reuse, dual-metric scoring) are
+> **Correcting an earlier writeup.** An initial version of this doc reported
+> `accuracy` = 0.000 for every run and concluded the marker contract "didn't
+> transfer to the test." **That was wrong** — it was the dropped-system-instruction
+> measurement bug (see the first gotcha), not a training outcome. Once the eval
+> replays the system instruction, the marker is emitted perfectly everywhere. The
+> honest finding is a null result for a *different* reason: the base model already
+> saturates the task.
+
+**Methodology takeaway:** a reward-shape DOE only measures something when (a) the
+task has genuine headroom for the base model, and (b) the **eval reproduces the
+training framing** — same system instruction — so you measure the model, not a
+prompt mismatch. The small split (n = 6) compounds the ceiling effect. The
+mechanics this example demonstrates (per-shape single-run sweeps, driver-owned
+labels, idempotent reuse, dual-metric scoring, **train/eval prompt parity**) are
 the reusable part; the *numbers* are a cautionary tale, not a leaderboard.
