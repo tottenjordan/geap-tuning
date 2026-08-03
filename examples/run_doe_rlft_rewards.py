@@ -163,7 +163,9 @@ def main() -> None:
         eval_client = genai_client_for_endpoint(cfg, endpoint)
         return run_rlft_eval(
             test_records,
-            generate_fn=lambda user_text, e=endpoint: generate(eval_client, e, user_text),
+            generate_fn=lambda user_text, system_instruction, e=endpoint: generate(
+                eval_client, e, user_text, system_instruction=system_instruction
+            ),
         )
 
     # 6. Run each reward shape as its own single-run sweep (reuse-or-launch).
@@ -189,7 +191,9 @@ def main() -> None:
     base_client = genai_client(cfg, base_model=BASE_MODEL)
     baseline = run_rlft_eval(
         test_records,
-        generate_fn=lambda user_text: generate(base_client, BASE_MODEL, user_text),
+        generate_fn=lambda user_text, system_instruction: generate(
+            base_client, BASE_MODEL, user_text, system_instruction=system_instruction
+        ),
     )
     print(
         f"  untuned baseline: {METRIC}={baseline[METRIC]:.3f} "

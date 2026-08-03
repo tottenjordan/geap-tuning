@@ -38,7 +38,7 @@ def test_run_rlft_eval_uses_injected_generate_fn() -> None:
     ]
     # Generator answers the first correctly, the second wrongly.
     replies = iter(["Answer: 4", "Answer: 99"])
-    metrics = run_rlft_eval(records, generate_fn=lambda _user: next(replies))
+    metrics = run_rlft_eval(records, generate_fn=lambda _user, _sys=None: next(replies))
     assert metrics["accuracy"] == 0.5
     assert metrics["correct"] == 1
     assert metrics["n"] == 2
@@ -61,7 +61,31 @@ def test_run_rlft_eval_content_accuracy_diverges_from_marker() -> None:
         },
     ]
     replies = iter(["The sum is **55**.", "2 to the 8th is 256."])
-    metrics = run_rlft_eval(records, generate_fn=lambda _user: next(replies))
+    metrics = run_rlft_eval(records, generate_fn=lambda _user, _sys=None: next(replies))
     assert metrics["accuracy"] == 0.0
     assert metrics["content_accuracy"] == 1.0
     assert metrics["content_correct"] == 2
+
+
+def test_run_rlft_eval_forwards_system_instruction() -> None:
+    # The record's systemInstruction must reach generate_fn so eval replays the
+    # training framing; a record without one forwards None.
+    records = [
+        {
+            "contents": [{"role": "user", "parts": [{"text": "2+2?"}]}],
+            "systemInstruction": {"parts": [{"text": "End with 'Answer: <number>'."}]},
+            "references": {"ground_truth_answer": "4"},
+        },
+        {
+            "contents": [{"role": "user", "parts": [{"text": "3+3?"}]}],
+            "references": {"ground_truth_answer": "6"},
+        },
+    ]
+    seen: list[str | None] = []
+
+    def generate_fn(_user: str, system_instruction: str | None) -> str:
+        seen.append(system_instruction)
+        return "Answer: 4"
+
+    run_rlft_eval(records, generate_fn=generate_fn)
+    assert seen == ["End with 'Answer: <number>'.", None]

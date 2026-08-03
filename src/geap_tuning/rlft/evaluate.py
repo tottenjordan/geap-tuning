@@ -7,6 +7,14 @@ record's ``references``, and report the fraction with a positive reward.
 without live calls — the example driver binds it to
 :func:`geap_tuning.inference.generate` on the tuned endpoint.
 
+**The eval replays each record's own ``systemInstruction``.** RLFT records here are
+trained under a system instruction (e.g. "end with the final answer on its own line
+as 'Answer: <number>'") that carries the output contract the reward scores. Dropping
+it at eval time makes the model answer in free prose and never emit the marker —
+scoring 0 on the reward-based ``accuracy`` even when it solves every problem. So
+``run_rlft_eval`` extracts each record's ``systemInstruction`` and passes it to
+``generate_fn`` alongside the user text, keeping inference faithful to training.
+
 Two metrics come out of one generation pass (the model call is the expensive part):
 
 - ``accuracy`` — the **reward-based** score: correct *and* in the ``Answer: <n>``
@@ -58,9 +66,23 @@ def score_accuracy(rewards: Sequence[float]) -> dict[str, Any]:
     return {"accuracy": correct / n if n else 0.0, "correct": correct, "n": n}
 
 
+def _record_system_instruction(record: Record) -> str | None:
+    """Return the record's flat system-instruction text, or ``None`` if it has none.
+
+    RLFT records built by :func:`geap_tuning.rlft.data.build_rlft_records` carry a
+    ``systemInstruction`` (see :func:`geap_tuning.schemas.rlft_example`) shaped
+    ``{"parts": [{"text": ...}]}``. Replaying it at eval time is what keeps
+    inference faithful to training (see the module docstring).
+    """
+    parts = record.get("systemInstruction", {}).get("parts")
+    if not parts:
+        return None
+    return parts[0].get("text")
+
+
 def run_rlft_eval(
     records: Sequence[Record],
-    generate_fn: Callable[[str], str],
+    generate_fn: Callable[[str, str | None], str],
 ) -> dict[str, Any]:
     """Generate one reply per prompt and score it two ways against ``references``.
 
@@ -69,11 +91,20 @@ def run_rlft_eval(
     ``content_correct``), both from the same generation pass. The generated text is
     wrapped as a ``{"parts": [...]}`` Content dict so the reward sees the same shape
     it receives in the GEAP sandbox.
+
+    ``generate_fn`` is called as ``generate_fn(user_text, system_instruction)`` — the
+    per-record ``systemInstruction`` (or ``None``) is threaded through so the tuned
+    model is prompted under the same framing it was trained on. The example driver
+    binds it to a closure over :func:`geap_tuning.inference.generate` that forwards
+    ``system_instruction=`` to the endpoint.
     """
     rewards: list[float] = []
     content_hits = 0
     for record in records:
-        reply = generate_fn(record["contents"][0]["parts"][0]["text"])
+        reply = generate_fn(
+            record["contents"][0]["parts"][0]["text"],
+            _record_system_instruction(record),
+        )
         rewards.append(
             reward_evaluate(
                 {"references": record["references"]},
