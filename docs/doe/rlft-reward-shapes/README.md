@@ -61,14 +61,15 @@ already have a finished job.
   - `content_accuracy` — **marker-agnostic**: does the ground-truth number appear
     anywhere in the reply (`rlft.evaluate.content_correct`)?
 
-  They diverge exactly when a reward shapes *content* but not *format*. Live, the
-  `string-match` model answered every held-out problem **correctly in prose**
-  (`"the sum is **55**"`) but without the `Answer:` marker → `accuracy` = 0.0 while
-  `content_accuracy` = 1.0. So a format-only reward that never enforces the contract
-  can leave the model solving the task yet scoring zero on the marker-gated metric —
-  the DOE's headline finding, and the reason both columns are reported. (Reward
-  shapes whose reward *is* the correctness check — `code-exec`, `composite` — train
-  the marker directly, so their two scores track each other.)
+  They diverge whenever a model gets the math right but omits the `Answer:` marker.
+  Live, **every** run — the untuned baseline and all four tuned shapes — scored
+  `accuracy` = 0.0 / `content_accuracy` = 1.0: the models answered every held-out
+  problem **correctly in prose** (`"the sum is **55**"`) but none emitted the
+  marker at inference. Reporting both columns is what surfaces this: a single
+  marker-gated number would read as a flat failure, when in fact the content is
+  perfect. (Note this even held for `code-exec`/`composite`, whose reward *is* the
+  marker-gated correctness check — so the marker was reinforced in training yet did
+  not transfer to the marker-free test prompts.)
 - **Tuned-endpoint location.** A tuned Gemini 3.x model is deployed to the `us`
   (or `eu`) **multi-region** endpoint, not the `us-central1` region the job ran
   in. Inference must target the endpoint's own location or it 404s — the example
@@ -80,23 +81,40 @@ already have a finished job.
 
 ## Results
 
-> **Status: partial.** Live run in progress (started 2026-07-31). Jobs run
-> sequentially — `string-match` ✅, `code-exec` (running), then `autorater` and
-> `composite`. This table will be completed once all four jobs finish; the
-> `string-match` row below is measured from its live endpoint.
+> **Status: complete.** All four RLFT jobs finished (`gemini-3.5-flash`,
+> `us-central1`, held-out split of **n = 6**). Scored offline against each tuned
+> endpoint plus the untuned baseline; `content_accuracy` is marker-agnostic.
 
 | Reward shape | `accuracy` (marker) | `content_accuracy` | vs. untuned |
 |---|---|---|---|
-| untuned baseline | _pending_ | _pending_ | — |
-| `string-match` | 0.000 | 1.000 | _pending_ |
-| `code-exec` | _pending_ | _pending_ | _pending_ |
-| `autorater` | _pending_ | _pending_ | _pending_ |
-| `composite` | _pending_ | _pending_ | _pending_ |
+| untuned baseline | 0.000 | 1.000 | — |
+| `string-match` | 0.000 | 1.000 | ±0.000 |
+| `code-exec` | 0.000 | 1.000 | ±0.000 |
+| `autorater` | 0.000 | 1.000 | ±0.000 |
+| `composite` | 0.000 | 1.000 | ±0.000 |
 
-`string-match`'s split scores (`accuracy` 0.0, `content_accuracy` 1.0) are the crux
-of this DOE: the format-only reward left a model that solves every problem but never
-emits the `Answer:` marker. See "Metric semantics" above.
+![Reward-shape metrics: a grouped bar chart over untuned/string-match/code-exec/autorater/composite showing content_accuracy at 1.0 for every run and marker-gated accuracy at 0.0 for every run.](metrics.png)
 
-<!-- ![Reward-shape metrics](metrics.png) -->
+### Read this honestly — it's a null result, and that's the finding
 
-**Best reward shape:** _pending._
+The table is **flat**: every run scores identically (content 1.0, marker 0.0), so
+`max(accuracy)` picks `string-match = 0.000` only as an arbitrary tie-break. There
+is **no best reward shape** here — the DOE did not discriminate. Two reasons, both
+worth internalizing before running a reward-shape sweep:
+
+1. **The base model already aces the task.** The untuned `gemini-3.5-flash` baseline
+   already scores `content_accuracy` = 1.000 — it solves every held-out problem
+   before any tuning. With no content headroom, no reward shape *can* show lift on
+   this dataset.
+2. **The marker contract never reaches the test.** Marker-gated `accuracy` is 0.000
+   everywhere, including `code-exec`/`composite` (whose reward *is* the marker-gated
+   check). The `Answer: <n>` format the parser needs isn't emitted on the
+   marker-free test prompts — training reinforced it, but it didn't transfer.
+
+**Methodology takeaway:** a reward-shape DOE only measures something when the task
+has genuine content headroom for the base model *and* the eval prompt matches the
+output contract the reward trains (here, ask for the `Answer:` marker, or score
+correctness marker-agnostically as `content_accuracy` does). The small split
+(n = 6) compounds both effects. The mechanics this example demonstrates (per-shape
+single-run sweeps, driver-owned labels, idempotent reuse, dual-metric scoring) are
+the reusable part; the *numbers* are a cautionary tale, not a leaderboard.
