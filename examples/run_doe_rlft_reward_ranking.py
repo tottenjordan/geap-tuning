@@ -6,7 +6,8 @@ entrypoint, not covered by the test suite (pytest exercises the mocked units in
 ``geap_tuning.rlft.bench`` / ``geap_tuning.rlft.evaluate``). Run it with a real
 ``.env`` and ``gcloud auth`` in place:
 
-    uv run python examples/run_doe_rlft_reward_ranking.py             # run + tables
+    uv run python examples/run_doe_rlft_reward_ranking.py --pilot-only  # gate only, no spend
+    uv run python examples/run_doe_rlft_reward_ranking.py               # run + tables
     uv run --group viz python examples/run_doe_rlft_reward_ranking.py --plot   # + PNGs
 
 The sibling demo ``run_doe_rlft_rewards.py`` swept the same four reward shapes and
@@ -17,25 +18,34 @@ was handed to it for free by the system instruction. See
 the shapes measurably diverge, **reusing the orchestration unchanged**
 (``doe.run_sweep`` + one single-run ``SweepConfig`` per shape):
 
-1. **Harder, tiered, larger bank** — ``rlft.bench.HARD_MATH_PROBLEMS`` (150 multi-
-   step problems across easy/medium/hard, stratified split → test n≈30).
-2. **Weaker base** — ``gemini-2.5-flash-lite`` instead of ``gemini-3.5-flash`` so
-   there is correctness headroom. (If that base does not support RLFT in your
-   region, step up to ``gemini-2.5-flash``; confirm at the pilot gate below.)
-3. **Neutral system instruction** — ``bench.NEUTRAL_SYSTEM_INSTRUCTION`` drops the
+1. **Neutral system instruction** — ``bench.NEUTRAL_SYSTEM_INSTRUCTION`` drops the
    ``Answer: <n>`` contract, so the format-only ``string-match`` reward has
-   something real to teach → format headroom.
+   something real to teach. This is the load-bearing change: ``format_rate`` is the
+   axis this sweep can actually rank on.
+2. **Base model** — ``gemini-3.5-flash``, the **only** base GEAP documents as
+   RLFT-supported. The original design called for a *weaker* base to open
+   correctness headroom, but that lever does not exist: RLFT tunes only
+   ``gemini-3.5-flash``, which saturates any verifiable-math task (both pilots on a
+   ``gemini-2.5-flash-lite`` base still scored correctness ≈ 0.95 — see
+   ``docs/doe/rlft-reward-ranking/README.md``). So ``correctness`` is expected to
+   stay near ceiling: a documented finding, not a rankable axis here.
+3. **Harder, tiered, larger bank** — ``rlft.bench.HARD_MATH_PROBLEMS`` (150 multi-
+   step problems across easy/medium/hard, stratified split → test n≈30). Kept for a
+   larger, balanced test split, though it cannot create correctness headroom against
+   this base.
 4. **Multi-objective scoring** — ``run_rlft_multimetric_eval`` scores three
    independent axes (``correctness`` / ``format_rate`` / ``explanation_quality``)
    plus a per-difficulty breakdown, and ``bootstrap_ci`` reports each with a 95%
    CI so "best shape" is a ranked, significance-aware claim, not an arbitrary
    ``max``.
 
-A **pilot gate** scores the untuned base first and refuses to launch the four
-jobs unless there is real headroom (baseline correctness below ceiling, marker
-rate low) — pass ``--force`` to launch anyway. The explanation-quality judge uses
-a **different** model (``gemini-2.5-pro``) than the training autorater reward
-(``gemini-2.5-flash``) to avoid grading the model with its own trainer.
+A **pilot gate** scores the untuned base first and refuses to launch the four jobs
+unless the **format axis** has headroom (baseline ``format_rate`` below ceiling —
+the marker is no longer free). ``correctness`` is reported but *not* gated: against
+``gemini-3.5-flash`` it is saturated by design. Pass ``--force`` to launch anyway.
+The explanation-quality judge uses a **different** model (``gemini-2.5-pro``) than
+the training autorater reward (``gemini-2.5-flash``) to avoid grading the model
+with its own trainer.
 """
 
 from __future__ import annotations
@@ -68,15 +78,16 @@ from geap_tuning.rlft.tune import (
 EXPERIMENT_NAME = "geap-doe-rlft-reward-ranking"
 DATA_DIR = Path("datasets/rlft_bench")
 GCS_PREFIX = "doe_rlft_reward_ranking"
-BASE_MODEL = "gemini-2.5-flash-lite"  # weaker base for headroom; verify RLFT support
+BASE_MODEL = "gemini-3.5-flash"  # only RLFT-supported base; correctness saturates by design
 JUDGE_MODEL = "gemini-2.5-pro"  # distinct from the training autorater (gemini-2.5-flash)
 PLOT_PATH = Path("docs/doe/rlft-reward-ranking/metrics.png")
 TIER_PLOT_PATH = Path("docs/doe/rlft-reward-ranking/metrics_by_tier.png")
 
-# The three ranked axes (correctness is primary), plus the pilot-gate ceilings.
+# The three measured axes. correctness is reported but saturated on gemini-3.5-flash
+# (the only RLFT base), so the pilot gate keys only on format_rate — the one axis the
+# neutral instruction leaves open to rank.
 AXES = ("correctness", "format_rate", "explanation_quality")
-CORRECTNESS_CEILING = 0.7  # baseline must be below this to have headroom
-FORMAT_CEILING = 0.5  # baseline marker rate must be low (marker not free)
+FORMAT_CEILING = 0.5  # baseline marker rate must be low (marker not free) to rank format
 
 _SCORE_RE = re.compile(r"(?:0?\.\d+|[01](?:\.0+)?)")
 
@@ -138,60 +149,32 @@ def _print_leaderboard(rows: list[dict[str, object]], results_by_run: dict[str, 
         print(f"  {run:>14}: {metrics['correctness']:.3f}  CI[{low:.3f}, {high:.3f}]")
 
 
-def main() -> None:
-    """Run the rank-capable reward-shape DOE against live GEAP and print tables."""
-    cfg = load_config()
-    client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
-    plot = "--plot" in sys.argv
-    force = "--force" in sys.argv
-    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
+def _gate_ok(baseline: dict[str, object], *, force: bool) -> bool:
+    """Print the pilot line and return whether the format axis clears the gate.
 
-    # 1. Build and stage the harder tiered bench (neutral instruction — no marker).
-    paths = build_bench_dataset(DATA_DIR, system_instruction=NEUTRAL_SYSTEM_INSTRUCTION)
-    train_uri = upload_file(paths["train"], f"{cfg.bucket}/{GCS_PREFIX}/train.jsonl")
-    val_uri = upload_file(paths["val"], f"{cfg.bucket}/{GCS_PREFIX}/val.jsonl")
-    print(f"Uploaded train={train_uri} val={val_uri}")
-    train_problems, _, test_problems = split_stratified(HARD_MATH_PROBLEMS)
-    train_records = build_bench_records(
-        train_problems, system_instruction=NEUTRAL_SYSTEM_INSTRUCTION
-    )
-    test_records = build_bench_records(test_problems, system_instruction=NEUTRAL_SYSTEM_INSTRUCTION)
-    print(f"Bench: {len(train_records)} train, {len(test_records)} test problems")
-
-    # 2. Pilot gate — score the UNTUNED base before spending on four jobs. Gemini
-    #    2.x inference runs on the global endpoint, so route the baseline there.
-    base_client = genai_client(cfg, base_model=BASE_MODEL)
-    judge_client = genai_client(cfg, base_model=JUDGE_MODEL)
-    judge_fn = make_judge(judge_client, JUDGE_MODEL)
-    baseline = run_rlft_multimetric_eval(
-        test_records,
-        generate_fn=lambda user_text, system_instruction: generate(
-            base_client, BASE_MODEL, user_text, system_instruction=system_instruction
-        ),
-        judge_fn=judge_fn,
-    )
+    correctness is saturated on ``gemini-3.5-flash`` by design, so the gate keys
+    only on ``format_rate`` (the marker is no longer free under the neutral
+    instruction). ``--force`` overrides a failing gate.
+    """
     print(
         f"\nPilot gate — untuned {BASE_MODEL}: correctness={baseline['correctness']:.3f} "
-        f"format_rate={baseline['format_rate']:.3f} "
+        f"(saturated by design, not gated) format_rate={baseline['format_rate']:.3f} "
         f"explanation_quality={baseline.get('explanation_quality', 0.0):.3f}"
     )
-    has_headroom = (
-        baseline["correctness"] < CORRECTNESS_CEILING and baseline["format_rate"] < FORMAT_CEILING
+    if baseline["format_rate"] < FORMAT_CEILING or force:
+        print("Pilot gate PASSED — format headroom confirmed; launching the sweep.\n")
+        return True
+    print(
+        f"\nPILOT GATE FAILED: baseline format_rate must be < {FORMAT_CEILING} for the "
+        "sweep to measure format lift (the marker should not be emitted for free). "
+        "Pass --force to launch anyway."
     )
-    if not has_headroom and not force:
-        print(
-            f"\nPILOT GATE FAILED: baseline correctness must be < {CORRECTNESS_CEILING} and "
-            f"format_rate < {FORMAT_CEILING} for the sweep to measure lift. "
-            "Pick a weaker base or harder tier, or pass --force to launch anyway."
-        )
-        return
-    print("Pilot gate PASSED — headroom confirmed; launching the sweep.\n")
+    return False
 
-    # 3. Build one reward object per shape (autorater needs a fully-qualified path).
-    autorater_model = (
-        f"projects/{cfg.project}/locations/{cfg.location}/publishers/google/models/gemini-2.5-flash"
-    )
-    shapes: list[tuple[str, SweepConfig]] = [
+
+def _build_shapes(autorater_model: str) -> list[tuple[str, SweepConfig]]:
+    """One single-run ``SweepConfig`` per reward shape (reward object in ``fixed``)."""
+    return [
         (
             "string-match",
             SweepConfig(
@@ -238,6 +221,52 @@ def main() -> None:
             ),
         ),
     ]
+
+
+def main() -> None:
+    """Run the rank-capable reward-shape DOE against live GEAP and print tables."""
+    cfg = load_config()
+    client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
+    plot = "--plot" in sys.argv
+    force = "--force" in sys.argv
+    pilot_only = "--pilot-only" in sys.argv  # score the gate, then stop (no tuning spend)
+    print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
+
+    # 1. Build and stage the harder tiered bench (neutral instruction — no marker).
+    paths = build_bench_dataset(DATA_DIR, system_instruction=NEUTRAL_SYSTEM_INSTRUCTION)
+    train_uri = upload_file(paths["train"], f"{cfg.bucket}/{GCS_PREFIX}/train.jsonl")
+    val_uri = upload_file(paths["val"], f"{cfg.bucket}/{GCS_PREFIX}/val.jsonl")
+    print(f"Uploaded train={train_uri} val={val_uri}")
+    train_problems, _, test_problems = split_stratified(HARD_MATH_PROBLEMS)
+    train_records = build_bench_records(
+        train_problems, system_instruction=NEUTRAL_SYSTEM_INSTRUCTION
+    )
+    test_records = build_bench_records(test_problems, system_instruction=NEUTRAL_SYSTEM_INSTRUCTION)
+    print(f"Bench: {len(train_records)} train, {len(test_records)} test problems")
+
+    # 2. Pilot gate — score the UNTUNED base before spending on four jobs. Gemini
+    #    2.x inference runs on the global endpoint, so route the baseline there.
+    base_client = genai_client(cfg, base_model=BASE_MODEL)
+    judge_client = genai_client(cfg, base_model=JUDGE_MODEL)
+    judge_fn = make_judge(judge_client, JUDGE_MODEL)
+    baseline = run_rlft_multimetric_eval(
+        test_records,
+        generate_fn=lambda user_text, system_instruction: generate(
+            base_client, BASE_MODEL, user_text, system_instruction=system_instruction
+        ),
+        judge_fn=judge_fn,
+    )
+    if not _gate_ok(baseline, force=force):
+        return
+    if pilot_only:
+        print("--pilot-only: stopping before any tuning spend.")
+        return
+
+    # 3. Build one reward object per shape (autorater needs a fully-qualified path).
+    autorater_model = (
+        f"projects/{cfg.project}/locations/{cfg.location}/publishers/google/models/gemini-2.5-flash"
+    )
+    shapes = _build_shapes(autorater_model)
 
     # 4. Preflight every reward on one record before spending money.
     for label, sweep in shapes:

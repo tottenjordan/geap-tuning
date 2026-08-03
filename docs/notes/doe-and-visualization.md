@@ -129,24 +129,37 @@ worked, the *experiment* had nothing to measure.
 fix the design (same orchestration, no `doe.py` change) and are the pattern to copy
 for a rank-capable reward sweep. The requirements:
 
-- **Give every objective headroom.** A reward-shape sweep only discriminates when the
-  base model *can't already* do the task. Three levers, all in the new
-  `rlft/bench.py`: a harder, **difficulty-tiered** bank (`HARD_MATH_PROBLEMS`, 150
-  multi-step problems, computed answers), a **weaker base** (`gemini-2.5-flash-lite`,
-  not `gemini-3.5-flash`), and a **neutral system instruction**
-  (`NEUTRAL_SYSTEM_INSTRUCTION`) that **drops the `Answer: <n>` contract** — without
-  which the base emits the marker for free and the format-only `string-match` reward
-  has nothing to teach.
-- **Gate on headroom before spending.** Score the untuned base first and refuse to
-  launch the four jobs unless correctness is below ceiling *and* the marker rate is
-  low. A reward-shape DOE that skips this is a spend-first, not an experiment.
+- **Give the objective headroom — but know which levers actually exist.** A
+  reward-shape sweep only discriminates when the base *can't already* do the task. The
+  plan had three levers; only two are usable, and that asymmetry *is* the finding:
+  - **Neutral system instruction** (`NEUTRAL_SYSTEM_INSTRUCTION`) **drops the
+    `Answer: <n>` contract** → opens **format** headroom for the format-only
+    `string-match` reward. This is the load-bearing lever; `format_rate` is the axis
+    that ranks.
+  - **Harder, difficulty-tiered bank** (`HARD_MATH_PROBLEMS`, 150 multi-step problems,
+    computed answers) — kept for a larger, balanced test split.
+  - **A weaker base does not open correctness headroom.** Empirically, every base we
+    ran saturates the task: two pilots on `gemini-2.5-flash-lite` scored correctness
+    ≈ 0.93–0.97 on a competition-flavored bank, and `gemini-3.5-flash` scored 0.900.
+    GEAP docs also point to `gemini-3.5-flash` as the RLFT base (a 2.5 base is not
+    documented for RLFT — untested here), so there is no weaker RLFT base to fall back
+    to anyway. **Lesson: for RLFT on verifiable math, `correctness` cannot be made a
+    rankable axis — no reachable base has headroom on it. Rank on `format_rate`
+    (opened by the neutral instruction) and keep `correctness` as a saturated
+    control.** See also [environment.md](environment.md) (Gemini 3.x tuning is
+    regional) and [tuning-apis.md](tuning-apis.md).
+- **Gate on the axis that can move, before spending.** Score the untuned base first
+  and refuse to launch unless *that* axis has headroom. Here the gate keys on
+  `format_rate < 0.5` (correctness is saturated by design — reported, not gated);
+  `--pilot-only` runs the gate with **zero tuning spend**. A reward-shape DOE that
+  skips this is a spend-first, not an experiment.
 - **Measure each objective on its own axis.** Different rewards optimize different
   things, so one headline can't rank them. `run_rlft_multimetric_eval` returns
-  `correctness` (marker-agnostic, primary), `format_rate` (marker present regardless
-  of correctness — the `string-match` axis), `explanation_quality` (an **offline LLM
-  judge**, which must be a *different* model than any training autorater or it grades
-  with the trainer), plus a per-tier correctness breakdown — all from one generation
-  pass.
+  `format_rate` (marker present regardless of correctness — the primary rankable axis,
+  the `string-match` target), `explanation_quality` (an **offline LLM judge**, which
+  must be a *different* model than any training autorater or it grades with the
+  trainer), and `correctness` (marker-agnostic — a saturated control on this base),
+  plus a per-tier correctness breakdown — all from one generation pass.
 - **Rank with a confidence interval, not `max`.** `evaluate.bootstrap_ci(hits, n)` is
   a seeded, stdlib-only bootstrap of the proportion, so "best shape" is reported with
   whether the gap over the runner-up / baseline is significant. Even n≈30 gives wide
