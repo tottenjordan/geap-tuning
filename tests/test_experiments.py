@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from google.api_core import exceptions as api_exceptions
 
 from geap_tuning import experiments
 
@@ -80,6 +81,21 @@ def test_track_run_skips_log_params_when_none(fake_aiplatform: MagicMock) -> Non
     with experiments.track_run("run-1"):
         pass
     fake_aiplatform.log_params.assert_not_called()
+
+
+def test_track_run_resumes_when_run_already_exists(fake_aiplatform: MagicMock) -> None:
+    run = SimpleNamespace(name="run-1")
+    resumed = MagicMock()
+    resumed.__enter__.return_value = run
+    # First call (create) 409s; second call (resume=True) succeeds.
+    fake_aiplatform.start_run.side_effect = [api_exceptions.AlreadyExists("exists"), resumed]
+
+    with experiments.track_run("run-1", params={"epochs": 2}) as yielded:
+        assert yielded is run
+
+    assert fake_aiplatform.start_run.call_count == 2
+    assert fake_aiplatform.start_run.call_args.kwargs["resume"] is True
+    assert fake_aiplatform.log_params.call_args.args[0] == {"epochs": 2}
 
 
 def test_log_summary_metrics_forwards(fake_aiplatform: MagicMock) -> None:

@@ -24,6 +24,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+from google.api_core import exceptions as api_exceptions
 from google.cloud import aiplatform
 
 if TYPE_CHECKING:
@@ -93,8 +94,17 @@ def track_run(
 
     ``params`` values must be scalar (str/int/float/bool) — Experiments params
     are a flat input snapshot (base_model, adapter_size, epochs, …).
+
+    **Idempotent by run name.** If a run with this name already exists (e.g. a
+    DOE re-run after `run_sweep` reused finished jobs), it is *resumed* rather
+    than re-created, so re-running a sweep never 409s on Experiments logging —
+    matching the job-level reuse it is paired with.
     """
-    with aiplatform.start_run(run_name) as run:
+    try:
+        run_cm = aiplatform.start_run(run_name)
+    except api_exceptions.AlreadyExists:
+        run_cm = aiplatform.start_run(run_name, resume=True)
+    with run_cm as run:
         if params:
             aiplatform.log_params(params)
         yield run
