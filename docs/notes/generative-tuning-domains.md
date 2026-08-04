@@ -63,6 +63,29 @@ headroom.
   check that the two prior math nulls motivated. `bootstrap_ci` reports a 95% CI on
   the full-satisfaction rate.
 
+## RLFT pilot-gate finding (exact counts vs. bands)
+
+Ran `run_rlft_constrained.py --pilot-only` (free — scores the untuned base only)
+against `gemini-3.5-flash` (`us-central1`, n=30 held out):
+
+- **Band-based constraints saturate.** The first bank used count *bands* ("between
+  40 and 90 words", "between 3 and 6 sentences"). The base scored `accuracy=0.992`,
+  `full_satisfaction_rate=0.933` — keywords/forbidden 1.000, word/sentence bands
+  ~0.97. The gate correctly refused to spend (no headroom).
+- **Exact counts reopen headroom.** Switching to exact targets ("exactly 55 words,
+  exactly 4 sentences", encoded as `min == max` so the reward is unchanged) drops
+  the base to `accuracy=0.823`, `full_satisfaction_rate=0.000` — and the headroom
+  is fully localized: `word_count 0.000 (0/30)` while keywords 0.986, forbidden
+  1.000, sentence_count 1.000. The base can hit an exact *sentence* count but never
+  an exact *word* count. Keeping keywords/forbidden modest (2–3 / 1–2 per prompt)
+  keeps the easy components from masking the hard one in the micro-average.
+- **Structural caveat vs. the marker null.** Exact word count has a ~0% base rate,
+  echoing the prior marker null — but unlike a from-scratch token format, the base
+  always emits *some* word count, so across `samples_per_prompt` rollouts some land
+  on the target by natural variation, giving RLFT an advantage signal to climb.
+  Whether that yields a measurable word-count lift is the open question a live run
+  answers.
+
 ## Measured lifts
 
 Pending a live authorized run (each incurs one tuning job). Record base→tuned

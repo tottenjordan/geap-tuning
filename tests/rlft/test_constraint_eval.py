@@ -21,27 +21,30 @@ def test_accuracy_is_mean_graded_reward() -> None:
 
 
 def test_full_satisfaction_counts_only_perfect() -> None:
-    # One record; craft a reply that satisfies every constraint of spec 0.
+    # One record; craft a reply that satisfies every constraint of spec 0. The
+    # counts are EXACT (min == max), so the reply must hit them precisely.
     spec = CONSTRAINT_SPECS[0]
     records = build_records([spec])
     refs = spec.references
     keywords = refs["required_keywords"].split(",")
-    min_words = int(refs["min_words"])
-    # Build a reply: all keywords + enough filler words + right sentence count.
-    body_words = list(keywords)
-    while len(body_words) < min_words + 2:
-        body_words.append("word")
-    n_sentences = int(refs["min_sentences"])
-    # Distribute into the minimum number of sentences.
-    chunk = max(1, len(body_words) // n_sentences)
+    n_words = int(refs["min_words"])  # == max_words (exact target)
+    n_sentences = int(refs["min_sentences"])  # == max_sentences (exact target)
+    # Build exactly n_words words: all keywords, padded with a filler token that is
+    # neither a keyword nor a forbidden word.
+    words = list(keywords)
+    while len(words) < n_words:
+        words.append("word")
+    words = words[:n_words]
+    # Distribute into exactly n_sentences sentences (each non-empty), remainder up front.
+    per = n_words // n_sentences
+    counts = [per] * n_sentences
+    for i in range(n_words - per * n_sentences):
+        counts[i] += 1
     sentences = []
-    for i in range(n_sentences):
-        piece = body_words[i * chunk : (i + 1) * chunk] or ["word"]
-        sentences.append(" ".join(piece))
-    # Attach leftover words to the last sentence.
-    leftover = body_words[n_sentences * chunk :]
-    if leftover:
-        sentences[-1] += " " + " ".join(leftover)
+    idx = 0
+    for count in counts:
+        sentences.append(" ".join(words[idx : idx + count]))
+        idx += count
     reply = ". ".join(sentences) + "."
 
     def perfect_fn(user_text: str, system_instruction: str | None) -> str:  # noqa: ARG001
