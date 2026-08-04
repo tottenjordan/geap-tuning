@@ -29,6 +29,9 @@ datasets/**/*.png
 datasets/**/*.webp
 datasets/**/*.csv
 
+# Generated DOE / sweep chart PNGs (produced at repo root by examples/run_doe*.py live runs)
+/doe*metrics.png
+
 # Editors / OS
 .DS_Store
 

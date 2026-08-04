@@ -1,7 +1,7 @@
 # DOE (design of experiments) & multi-run visualization
 
 Declarative hyperparameter sweeps and cross-run charts for tuning. Verified
-2026-07-29. Builds directly on [experiment tracking](experiment-tracking.md) (the
+2026-07-30. Builds directly on [experiment tracking](experiment-tracking.md) (the
 sweep logs each run there) and [checkpointing](checkpoints-and-continuous-tuning.md)
 (per-checkpoint curves).
 
@@ -10,13 +10,19 @@ sweep logs each run there) and [checkpointing](checkpoints-and-continuous-tuning
 [`src/geap_tuning/viz.py`](../../src/geap_tuning/viz.py) (plots), demoed by
 [`examples/run_doe.py`](../../examples/run_doe.py) /
 [`notebooks/10_doe.ipynb`](../../notebooks/10_doe.ipynb) (SFT sweep),
+[`examples/run_doe_banking77.py`](../../examples/run_doe_banking77.py) /
+[`notebooks/14_doe_banking77.ipynb`](../../notebooks/14_doe_banking77.ipynb)
+(discriminating SFT sweep + baseline — see below),
 [`examples/run_doe_dpo.py`](../../examples/run_doe_dpo.py) +
 [`examples/run_doe_rlft.py`](../../examples/run_doe_rlft.py) /
 [`notebooks/12_doe_dpo_rlft.ipynb`](../../notebooks/12_doe_dpo_rlft.ipynb) (DPO &
 RLFT hyperparameter sweeps),
 [`examples/run_doe_rlft_rewards.py`](../../examples/run_doe_rlft_rewards.py) /
 [`notebooks/15_doe_reward_types.ipynb`](../../notebooks/15_doe_reward_types.ipynb)
-(RLFT **reward-shape** sweep vs. an untuned baseline), and the read-only
+(RLFT **reward-shape** sweep vs. an untuned baseline),
+[`examples/run_doe_rlft_reward_ranking.py`](../../examples/run_doe_rlft_reward_ranking.py) /
+[`notebooks/16_doe_reward_ranking.ipynb`](../../notebooks/16_doe_reward_ranking.ipynb)
+(the **rank-capable** redesign of that sweep — see below), and the read-only
 [`examples/run_multi_run_viz.py`](../../examples/run_multi_run_viz.py) /
 [`notebooks/11_multi_run_viz.ipynb`](../../notebooks/11_multi_run_viz.ipynb) (charts
 an already-tracked experiment — **zero tuning cost**).
@@ -192,6 +198,32 @@ for a rank-capable reward sweep. The requirements:
 The original saturating sweep is kept as the cautionary tale
 (`docs/doe/rlft-reward-shapes/`); the ranking variant lives at
 `docs/doe/rlft-reward-ranking/`.
+
+## A discriminating SFT DOE + untuned baseline (banking77)
+
+The demo SFT sweep (`run_doe.py`, Experiment `geap-doe-sft`) **saturates at
+accuracy = 1.0 in every grid cell** — its 5-intent support-ticket set is too easy,
+so nothing separates. `run_doe_banking77.py` (notebook 14, Experiment
+`geap-doe-banking77`) crosses the **same** small SFT grid on
+[**banking77**](banking77-dataset.md) (77 fine-grained banking intents, large
+base-model headroom), so the runs actually **discriminate**.
+
+Two things make it a **before → after** story, both achieved with **no `doe.py`
+change**:
+
+- **Untuned baseline.** The base model is scored with the same offline
+  `evaluate_fn` (its "endpoint" is just the base-model name) and logged directly in
+  the driver via `track_run` + `log_summary_metrics` (`epochs`/`adapter_size` = 0)
+  — a baseline is not a tuning job, so `run_sweep` never sees it. It is prepended
+  as a `{"run": "baseline", ...}` row so it plots and tables next to the tuned runs.
+- **Constrained scoring.** Every record (and every inference call) carries a
+  `systemInstruction` listing all 77 labels; replies are canonicalized with
+  `parse_banking_prediction` before `run_eval` scores accuracy/macro_f1. This keeps
+  the untuned baseline honest (it emits valid labels too).
+
+The improvement is `select_best_run(...)['accuracy'] − baseline['accuracy']`.
+Everything else (idempotent reuse by display name, Experiments logging, the viz
+bars) is the shared `run_sweep` machinery.
 
 ## Visualization module (`viz.py`)
 

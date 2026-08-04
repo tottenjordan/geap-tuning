@@ -28,6 +28,7 @@ diagrams.
 | 11 | [`11_multi_run_viz.ipynb`](11_multi_run_viz.ipynb) | **Multi-run visualization** (read-only, no tuning cost) — chart runs already tracked in an Experiment | [`run_multi_run_viz.py`](../examples/run_multi_run_viz.py) |
 | 12 | [`12_doe_dpo_rlft.ipynb`](12_doe_dpo_rlft.ipynb) | **DOE for DPO & RLFT** — the same sweep driver for preference tuning (headline `win_rate`) and reinforcement tuning (declarative reward in `fixed`) | [`run_doe_dpo.py`](../examples/run_doe_dpo.py) / [`run_doe_rlft.py`](../examples/run_doe_rlft.py) |
 | 13 | [`13_rlft_experiment_tracking.ipynb`](13_rlft_experiment_tracking.ipynb) | **RLFT experiment tracking** — the counterpart of **08**: log per-checkpoint offline-eval accuracy to Vertex AI Experiments; opt-in Managed TensorBoard time-series | [`run_rlft_experiment_tracking.py`](../examples/run_rlft_experiment_tracking.py) |
+| 14 | [`14_doe_banking77.ipynb`](14_doe_banking77.ipynb) | **Discriminating SFT DOE** — the same sweep on **banking77** (77 intents) + an untuned baseline, for a real **before → after** improvement (the demo **10** saturates at 1.0) | [`run_doe_banking77.py`](../examples/run_doe_banking77.py) |
 
 ## Suggested order
 
@@ -42,10 +43,14 @@ unit, **11** charts a sweep's runs read-only (no tuning cost) — start there if
 experiment already exists — and **12** runs the same sweep driver for DPO and
 RLFT (read **02**/**03** first). **13** is the RLFT counterpart of **08** —
 per-checkpoint offline-eval accuracy logged to Experiments (+ opt-in TensorBoard).
+**14** re-runs the **10** sweep on the harder banking77 dataset with an untuned
+baseline, so the runs discriminate and you see a real before → after improvement
+(the demo **10** saturates at accuracy 1.0).
 
 ## Reference
 
 - API call shapes, JSONL schemas, hyperparameters — [`docs/notes/tuning-apis.md`](../docs/notes/tuning-apis.md)
 - Checkpointing & continuous tuning surface — [`docs/notes/checkpoints-and-continuous-tuning.md`](../docs/notes/checkpoints-and-continuous-tuning.md)
 - DOE sweeps & multi-run visualization — [`docs/notes/doe-and-visualization.md`](../docs/notes/doe-and-visualization.md)
+- banking77 discriminating dataset — [`docs/notes/banking77-dataset.md`](../docs/notes/banking77-dataset.md)
 - All session notes — [`docs/notes/`](../docs/notes/README.md)
