@@ -88,5 +88,37 @@ against `gemini-3.5-flash` (`us-central1`, n=30 held out):
 
 ## Measured lifts
 
+### RLFT constrained generation — a *third*, predicted null (ran live)
+
+`run_rlft_constrained.py` ran end-to-end on `gemini-3.5-flash` (`us-central1`,
+tuning job `SUCCEEDED` in ~53 min, n=30 held out). The pilot gate passed
+(base `accuracy=0.823 < 0.85`, headroom fully localized to exact word count),
+the job tuned, and the tuned endpoint was scored:
+
+| Metric | Base | Tuned | Δ |
+|---|---|---|---|
+| `accuracy` (mean graded reward) | 0.823 | 0.828 | +0.006 |
+| `full_satisfaction_rate` | 0.000 (CI [0,0]) | 0.000 (CI [0,0]) | — |
+| keywords | 0.986 | 1.000 | +0.014 |
+| forbidden | 1.000 | 1.000 | — |
+| **word_count** (the headroom axis) | 0.000 (0/30) | 0.000 (0/30) | **—** |
+| sentence_count | 1.000 | 1.000 | — |
+
+**The one moving component was `keywords` (0.986 → 1.000)** — a behavior the base
+already emitted ~99% of the time, which RL amplified to 100%. The exact-word-count
+axis, the only real headroom, stayed at 0/30 before *and* after. This is the
+structural caveat above, confirmed: an exact word count has a ~0% base rate, so
+nearly every rollout earns the same word-count reward → no advantage signal → no
+gradient. It is the same mechanism as the prior `Answer:`-marker null (see
+[DOE reward ranking](../doe/rlft-reward-ranking/README.md)): **RL amplifies
+behaviors the base sometimes produces; it cannot bootstrap a near-never behavior
+without an SFT warm-start.** The graded reward *did* deliver the promised
+variance (keywords moved, and the base's graded `accuracy` was 0.82 not 0.00), so
+the reward design is sound — the null is a genuine property of reinforcement
+tuning, and the pilot gate correctly identified real (but, as it turns out,
+un-RL-reachable) headroom.
+
+### SFT extraction / DPO email
+
 Pending a live authorized run (each incurs one tuning job). Record base→tuned
-numbers here after running the three drivers.
+numbers here after running `run_sft_extraction.py` / `run_preference_email.py`.
