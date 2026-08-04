@@ -43,7 +43,7 @@ def parse_json_object(text: str) -> dict[str, Any] | None:
     return obj if isinstance(obj, dict) else None
 
 
-def _norm(value: Any) -> str | None:
+def _norm(value: Any) -> str | None:  # noqa: ANN401 - a JSON scalar of unknown type
     """Type-insensitive normalization so ``3`` and ``"3"`` compare equal."""
     return None if value is None else str(value).strip().lower()
 
