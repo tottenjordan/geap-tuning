@@ -53,9 +53,13 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from geap_tuning.config import genai_client, genai_client_for_endpoint, load_config
-from geap_tuning.doe import SweepConfig, run_sweep
+from geap_tuning.doe import RunResult, SweepConfig, run_sweep
 from geap_tuning.experiments import experiment_dataframe, init_experiment
 from geap_tuning.gcs import upload_file
 from geap_tuning.inference import generate
@@ -223,6 +227,34 @@ def _build_shapes(autorater_model: str) -> list[tuple[str, SweepConfig]]:
     ]
 
 
+def _run_shapes(
+    shapes: list[tuple[str, SweepConfig]],
+    baseline: dict[str, object],
+    run_one: Callable[[SweepConfig], RunResult],
+) -> dict[str, dict]:
+    """Run each shape via ``run_one``, isolating failures.
+
+    A single job's failure (e.g. a transient server-side INTERNAL error raised as
+    a ``RuntimeError``) is reported and skipped so it can't discard the shapes that
+    already succeeded.
+    """
+    results_by_run: dict[str, dict] = {"untuned": baseline}
+    for label, sweep in shapes:
+        try:
+            result = run_one(sweep)
+        except RuntimeError as exc:  # a failed/transient job must not abort the sweep
+            print(f"  {label}: SKIPPED — {exc}")
+            continue
+        results_by_run[label] = result.metrics
+        tag = "reused" if result.reused else "launched"
+        print(
+            f"  {label}: correctness={result.metrics['correctness']:.3f} "
+            f"format_rate={result.metrics['format_rate']:.3f} "
+            f"quality={result.metrics.get('explanation_quality', 0.0):.3f} ({tag})"
+        )
+    return results_by_run
+
+
 def main() -> None:
     """Run the rank-capable reward-shape DOE against live GEAP and print tables."""
     cfg = load_config()
@@ -296,10 +328,10 @@ def main() -> None:
             judge_fn=judge_fn,
         )
 
-    # 7. Run each reward shape as its own single-run sweep (reuse-or-launch).
-    results_by_run: dict[str, dict] = {"untuned": baseline}
-    for label, sweep in shapes:
-        result = run_sweep(
+    # 7. Run each reward shape as its own single-run sweep (reuse-or-launch),
+    #    isolating each so one failed job can't discard the shapes that succeeded.
+    def run_one(sweep: SweepConfig) -> RunResult:
+        return run_sweep(
             client,
             sweep,
             train_uri=train_uri,
@@ -308,13 +340,8 @@ def main() -> None:
             experiment=EXPERIMENT_NAME,
             labels=cfg.labels,
         )[0]
-        results_by_run[label] = result.metrics
-        tag = "reused" if result.reused else "launched"
-        print(
-            f"  {label}: correctness={result.metrics['correctness']:.3f} "
-            f"format_rate={result.metrics['format_rate']:.3f} "
-            f"quality={result.metrics.get('explanation_quality', 0.0):.3f} ({tag})"
-        )
+
+    results_by_run = _run_shapes(shapes, baseline, run_one)
 
     # 8. Leaderboard + CIs (driver-owned labels — every empty-grid spec name is
     #    "default", so aggregate_results keys would collide).

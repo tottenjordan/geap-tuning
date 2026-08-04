@@ -134,8 +134,8 @@ for a rank-capable reward sweep. The requirements:
   plan had three levers; only two are usable, and that asymmetry *is* the finding:
   - **Neutral system instruction** (`NEUTRAL_SYSTEM_INSTRUCTION`) **drops the
     `Answer: <n>` contract** → opens **format** headroom for the format-only
-    `string-match` reward. This is the load-bearing lever; `format_rate` is the axis
-    that ranks.
+    `string-match` reward. This was the intended load-bearing lever — but see the next
+    bullet: opening the headroom was *necessary and not sufficient*.
   - **Harder, difficulty-tiered bank** (`HARD_MATH_PROBLEMS`, 150 multi-step problems,
     computed answers) — kept for a larger, balanced test split.
   - **A weaker base does not open correctness headroom.** Empirically, every base we
@@ -148,18 +148,37 @@ for a rank-capable reward sweep. The requirements:
     (opened by the neutral instruction) and keep `correctness` as a saturated
     control.** See also [environment.md](environment.md) (Gemini 3.x tuning is
     regional) and [tuning-apis.md](tuning-apis.md).
-- **Gate on the axis that can move, before spending.** Score the untuned base first
-  and refuse to launch unless *that* axis has headroom. Here the gate keys on
-  `format_rate < 0.5` (correctness is saturated by design — reported, not gated);
-  `--pilot-only` runs the gate with **zero tuning spend**. A reward-shape DOE that
-  skips this is a spend-first, not an experiment.
+- **Headroom the policy can't *reach* is still not rankable — the sharper finding.**
+  The live run cleared the format gate (baseline `format_rate` 0.000, full headroom)
+  and yet **RLFT still could not teach the marker**: even `string-match`, whose reward
+  regex is the exact `Answer:` marker, left `format_rate` at 0.000 (verified by probing
+  the tuned endpoint). Root cause — the base emits the marker ≈0% of the time, so every
+  rollout for a prompt earns the same reward → **no advantage signal, no gradient.**
+  Policy-gradient RL *amplifies* behaviors the base already produces sometimes; it
+  **cannot bootstrap a from-scratch output format**. Teaching one needs an **SFT
+  warm-start** (so the base emits the marker at a nonzero rate) *before* RLFT can
+  reinforce it. **Lesson: "give the objective headroom" means headroom the base can
+  actually reach with nonzero probability — an axis at a hard 0.000 base rate is
+  unrankable by RL alone, not just by a saturated base.** This makes the ranking
+  variant a *second, deeper null* than the sibling saturation null.
+- **Gate on the axis that can move, before spending — but a passing gate isn't a
+  promise it will move.** Score the untuned base first and refuse to launch unless
+  *that* axis has headroom. Here the gate keys on `format_rate < 0.5` (correctness is
+  saturated by design — reported, not gated); `--pilot-only` runs the gate with **zero
+  tuning spend**. Necessary, not sufficient: the gate confirms headroom *exists*, not
+  that RL can *reach* it (see the previous bullet) — a hard-0.000 base rate passes the
+  gate yet stays unlearnable. A reward-shape DOE that skips the gate is a spend-first;
+  one that treats a passing gate as a guaranteed win is naive.
 - **Measure each objective on its own axis.** Different rewards optimize different
   things, so one headline can't rank them. `run_rlft_multimetric_eval` returns
-  `format_rate` (marker present regardless of correctness — the primary rankable axis,
-  the `string-match` target), `explanation_quality` (an **offline LLM judge**, which
-  must be a *different* model than any training autorater or it grades with the
-  trainer), and `correctness` (marker-agnostic — a saturated control on this base),
-  plus a per-tier correctness breakdown — all from one generation pass.
+  `format_rate` (marker present regardless of correctness — the *intended* primary
+  rank axis, the `string-match` target; in the live run it stayed 0.000 for every
+  shape, per the RL-bootstrap bullet above), `explanation_quality` (an **offline LLM
+  judge**, which must be a *different* model than any training autorater or it grades
+  with the trainer — here it pinned at 1.000, too lenient to separate shapes), and
+  `correctness` (marker-agnostic — a saturated control on this base), plus a per-tier
+  correctness breakdown — all from one generation pass. All three axes ending flat is
+  what makes this the deeper null.
 - **Rank with a confidence interval, not `max`.** `evaluate.bootstrap_ci(hits, n)` is
   a seeded, stdlib-only bootstrap of the proportion, so "best shape" is reported with
   whether the gap over the runner-up / baseline is significant. Even n≈30 gives wide

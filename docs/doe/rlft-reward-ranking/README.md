@@ -7,7 +7,13 @@ This is the redesign of [`../rlft-reward-shapes/`](../rlft-reward-shapes/README.
 which swept the same four reward shapes and returned a **flat null result** (every
 shape *and* the untuned baseline scored 1.000). That was an honest finding about a
 saturated task, not a leaderboard. Here we re-engineer the *experiment* — **reusing
-the orchestration unchanged** — so the shapes measurably diverge and can be ranked.
+the orchestration unchanged** — to make the shapes measurably diverge and rank.
+
+> **Outcome (spoiler): a second, deeper null.** The redesign *did* open real headroom
+> on a fresh axis (`format_rate`), but RLFT still could not teach the marker — because
+> the base emits it ≈0% of the time, so the reward has no variance to climb. RL can't
+> bootstrap a from-scratch behavior without an SFT warm-start. See [Results](#results).
+> The design work was sound; the null is a genuine property of reinforcement tuning.
 
 - **Example:** [`examples/run_doe_rlft_reward_ranking.py`](../../../examples/run_doe_rlft_reward_ranking.py)
 - **Notebook:** [`notebooks/16_doe_reward_ranking.ipynb`](../../../notebooks/16_doe_reward_ranking.ipynb)
@@ -132,10 +138,10 @@ Reruns are **idempotent** — jobs are reused by display name
 
 ## Results
 
-> **Status: re-targeted to `gemini-3.5-flash`; pilot cleared the format gate and the
-> four jobs are launching.** The leaderboard below is pending the live run. The
-> journey to this design (two prior pilots on a 2.5 base) is recorded first because it
-> *is* the finding.
+> **Status: ran live on `gemini-3.5-flash`; a *second, deeper* null result.** The
+> pilot cleared the format gate (headroom was real), but RLFT still could not teach
+> the marker — for a genuinely different and sharper reason than the sibling sweep's
+> saturation null. That reason is the finding.
 
 ### The pilot journey — why correctness was abandoned as a rank axis
 
@@ -153,24 +159,68 @@ base that is definitely RLFT-supported also saturates correctness, so there is n
 weaker-base escape. **Correctness has no headroom to rank on, regardless of base tier
 or bank difficulty.**
 
-### Pilot 3 — untuned `gemini-3.5-flash`, held-out n=30 (the launch gate)
+### The live leaderboard — held-out n=30
 
-| Axis | Score | Gate | Headroom? |
-|---|---|---|---|
-| `format_rate` | **0.000** (0/30) | < 0.50 | ✅ full |
-| `correctness` | **0.900** (27/30) | not gated | saturated by design |
+| Shape | Job state | correctness | format_rate | explanation_quality |
+|---|---|---|---|---|
+| untuned baseline | — | 0.933 | **0.000** | 1.000 |
+| `string-match` | SUCCEEDED | 0.933 | **0.000** | 1.000 |
+| `code-exec` | SUCCEEDED | 0.933 | **0.000** | 1.000 |
+| `autorater` | FAILED (transient) | — | — | — |
+| `composite` | not run | — | — | — |
 
-Per-tier correctness: easy **1.000**, medium **0.800**, hard **0.900**. The format
-axis has *full* headroom — dropping the marker from the system instruction leaves the
-base emitting it 0% of the time — so the sweep can rank shapes on `format_rate`.
-**Gate PASS → four jobs launched.**
+`string-match` and `code-exec` tuned **identically to the baseline on every axis**.
+The `autorater` job died on a Google-side `code=13` "Internal error occurred" (its
+preflight was valid at `overall_reward=1.0`, so this is a transient server fault, not
+a config error); `composite` was not launched. Neither was re-run: both optimize
+axes that are *already saturated* (`explanation_quality` ≈ 1.0, `correctness` ≈ 0.93)
+and neither primarily targets format, so their rows are predictably flat too — not
+worth the tuning spend to confirm the obvious.
 
-### Expected leaderboard (to be confirmed by the live run)
+### The finding: RLFT can't bootstrap a behavior the base never emits
 
-- `string-match` and `code-exec` should top **`format_rate`** (both rewards require
-  the marker — string-match to score, code-exec to parse the answer it verifies).
-- `autorater` should top **`explanation_quality`** and leave `format_rate` near
-  baseline (it never rewards the marker).
-- `correctness` should stay near ceiling for every shape (the documented control).
-- Whether the `format_rate` gaps clear their bootstrap CIs at n≈30 is itself part of
-  the finding — overlapping CIs would mean "not yet distinguishable."
+The load-bearing surprise is that **`format_rate` stayed 0.000 even for
+`string-match`** — whose reward is exactly `Answer:\s*-?\d+` (`REGEX_CONTAINS`), the
+same marker `format_rate`/`extract_answer` measure. The reward was wired correctly;
+it simply had nothing to reinforce. Confirmed by probing the tuned `string-match`
+endpoint directly (this is *not* an eval/routing artifact):
+
+```
+prompt: a math word problem (neutral instruction, no marker)
+reply:  "... The final answer is **90**."   # correct number, never "Answer: 90"
+```
+
+**Root cause — no reward variance, no gradient.** The base emits the `Answer:` marker
+~0% of the time, so *every* rollout for a prompt earns the same (zero) format reward.
+With no advantage signal across rollouts, policy-gradient RL has nothing to push
+marker probability up. RL *amplifies* behaviors the base already produces sometimes;
+it **cannot conjure a behavior at ≈0% base probability**. Teaching a from-scratch
+output format needs an **SFT warm-start** (so the base emits the marker at a nonzero
+rate) *before* RLFT can reinforce it — or a base that already emits it occasionally.
+
+So the neutral instruction did its job — it opened *full* format headroom (baseline
+0.000) — but headroom the policy can't reach is not rankable. Combined with saturated
+`correctness` (control) and a too-lenient quality judge (`explanation_quality`
+pinned at 1.000), **no axis ranks.**
+
+### Why this is the more instructive null
+
+The two sibling DOEs form one arc:
+
+- [`../rlft-reward-shapes/`](../rlft-reward-shapes/README.md) → *"a saturated task
+  can't rank reward shapes"* (every shape and the baseline scored 1.000).
+- **this sweep** → *"even after you engineer headroom on a fresh axis, RLFT alone
+  can't teach a behavior the base never produces — you need an SFT warm-start first."*
+
+The redesign was sound (headroom was created and measured); the null is a real
+property of reinforcement tuning, not an experiment-design mistake. That is a better
+teaching outcome than a tidy leaderboard.
+
+### What *would* make format rank (future work, not run)
+
+1. **SFT warm-start on the marker**, then RLFT to reinforce it (the standard
+   RLHF/RLFT ordering — RL refines a behavior SFT has already made reachable).
+2. A **base that emits the marker occasionally** under the neutral instruction, giving
+   the format reward nonzero variance to climb.
+3. A **stricter `explanation_quality` judge** (or a task where quality genuinely
+   varies) so that axis isn't pinned at ceiling either.
