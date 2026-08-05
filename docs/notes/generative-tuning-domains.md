@@ -19,23 +19,35 @@ headroom.
 
 | Service | New domain | Module(s) | Headline metric | Driver / notebook |
 |---|---|---|---|---|
-| SFT | messy text → strict JSON extraction | `sft/extraction.py`, `sft/extraction_eval.py` | field exact-match `accuracy` (+ `json_validity`, `exact_match`) | `examples/run_sft_extraction.py` / `notebooks/17_sft_extraction.ipynb` |
-| DPO | concise professional email rewriting | `preference/email.py`, `preference/email_eval.py` | autorater `win_rate` (+ `mean_compression`) | `examples/run_preference_email.py` / `notebooks/18_preference_email.ipynb` |
+| SFT | messy text → strict JSON extraction, applying a **house normalization standard the base cannot guess** | `sft/extraction.py`, `sft/extraction_eval.py` | field exact-match `accuracy` (+ `per_field`, `json_validity`) | `examples/run_sft_extraction.py` / `notebooks/17_sft_extraction.ipynb` |
+| DPO | concise professional email rewriting | `preference/email.py`, `preference/email_eval.py` | **objective `mean_compression`** (+ `compression_win_rate`); subjective `win_rate` secondary | `examples/run_preference_email.py` / `notebooks/18_preference_email.ipynb` |
 | RLFT | constrained generation, **graded** reward | `rlft/constrained.py`, `rlft/constraint_reward.py`, `rlft/constraint_eval.py` | constraint `accuracy` (mean graded reward) + `full_satisfaction_rate` | `examples/run_rlft_constrained.py` / `notebooks/19_rlft_constrained.ipynb` |
 
 ## Design notes worth keeping
 
-- **SFT extraction headroom.** The gold `quantity` is kept an **int**, and the
-  system instruction forbids prose/code fences. Modern bases extract well, so the
-  headroom comes from type drift (`"3"` vs `3`) and fence/prose noise; the eval's
-  `per_field` breakdown shows where. Comparison is type-insensitive by design
-  (`str(v).strip().lower()`), yet the base still loses on validity/format.
-- **DPO judge is decoupled.** The A/B autorater prompt is **distinct** from the
-  generator's system instruction, blind (A = model under test, B = dispreferred
-  reference), and both preference completions carry the **same facts** so it grades
-  style, not content. `mean_compression` (rewrite/draft word ratio) is the
-  objective backstop. The dataset invariant — preferred word-count < dispreferred
-  for **every** triple — is unit-tested and is the concision signal DPO learns.
+- **SFT extraction headroom = a convention the base cannot guess.** Plain field
+  extraction saturates a modern base (it scored `accuracy=1.000` in a live run), so
+  the task was redesigned: the gold object applies a **house normalization standard**
+  the raw line does not reveal — strip the `ord-` prefix and upper-case the id
+  (`ord-g8850`→`G8850`), expand the city abbreviation (`PHL`→`Philadelphia`), map the
+  urgency word to an arbitrary P-code (`urgent`→`P0`), and integerize spelled-out
+  counts (`a dozen`→`12`). `SYSTEM_INSTRUCTION` *signals a standard applies* but
+  never spells out the arbitrary mapping — SFT must learn it from labels. Comparison
+  is type-insensitive (`str(v).strip().lower()`); the `per_field` breakdown localizes
+  exactly which conventions the base misses. **Key finding: not all conventions are
+  equally learnable — see Measured lifts.**
+- **DPO headline is objective concision, not the subjective judge.** A strong base
+  already out-writes hand-authored gold on a blind A/B judge (it wins 86.7% while
+  *expanding* the draft), so the subjective `win_rate` saturates and is kept only as
+  a secondary "what DPO doesn't move" signal. The honest headline is the objective
+  axis the preference pairs actually train: `mean_compression` (rewrite/draft word
+  ratio; <1 is shorter) plus `compression_win_rate` (fraction of drafts where the
+  tuned rewrite is strictly shorter than the base rewrite, a binomial rate that takes
+  `bootstrap_ci`). The judge prompt is still **distinct** from the generator's system
+  instruction, blind, and both completions carry the **same facts**. The dataset
+  invariant — preferred word-count < dispreferred for **every** triple — is
+  unit-tested and is the concision signal DPO learns. The pilot gate refuses to spend
+  unless base `mean_compression >= 0.9` (real concision headroom).
 - **RLFT graded reward answers both prior nulls.** The reward is the *fraction* of
   independently-checked components satisfied (each required keyword and each
   forbidden word is its own component; the word-count band and sentence-count band
@@ -118,7 +130,54 @@ the reward design is sound — the null is a genuine property of reinforcement
 tuning, and the pilot gate correctly identified real (but, as it turns out,
 un-RL-reachable) headroom.
 
-### SFT extraction / DPO email
+### SFT extraction — SFT learns *rule-based* conventions, resists an *arbitrary relabel* (ran live)
 
-Pending a live authorized run (each incurs one tuning job). Record base→tuned
-numbers here after running `run_sft_extraction.py` / `run_preference_email.py`.
+The v1 plain-extraction task saturated (`accuracy=1.000`), so it was redesigned to
+teach a house normalization standard (above) and re-gated with a pilot. Two live
+tunes on `gemini-2.5-flash` (`us-central1`, n=30 held out):
+
+- **v2 (`epochs=2`, `adapter=8`) — no lift.** base `accuracy=0.727` → tuned `0.727`.
+  It learned the transforms the base half-knew but not the arbitrary map. Diagnosed
+  as under-training and retuned.
+- **v3 (`epochs=6`, `adapter=16`) — a modest, telling lift.**
+
+| Field | Convention kind | Base | Tuned (v3) |
+|---|---|---|---|
+| `accuracy` (micro) | — | 0.727 | **0.787** (+0.060) |
+| `order_id` | rule (strip `ord-` + upper-case) | 0.667 | **1.000** |
+| `city` | lookup the base already half-knows (`PHL`→Philadelphia) | 0.967 | 0.967 |
+| `quantity` | rule (spelled-out → int) | 1.000 | 0.967 |
+| **`priority`** | **fully-arbitrary relabel (`urgent`→`P0`)** | **0.000** | **0.000** |
+
+**The entire +0.060 lift is `order_id` going to perfect; `priority` never moved —
+even with 3× epochs and 2× adapter.** A direct endpoint probe confirms the tuned
+model applies every rule-based transform (`ord-g8850`→`G8850`, `PHL`→`Philadelphia`,
+`a dozen`→`12`) but **never emits a single P-code** — it echoes the raw urgency word
+(`high`, `Low`, `normal`), and in one case even relabels `urgent`→`high`. So this is
+not simple under-fit: within reachable LoRA hyperparameters, SFT readily learns
+deterministic **string-transform** conventions that align with the model's
+generalization, but **resists an arbitrary categorical relabel that fights a strong
+semantic prior** (the base "knows" `urgent` is a priority word and refuses to overwrite
+it with an opaque code). A parallel to the RLFT nulls from the other side: RLFT can't
+teach a from-scratch behavior for lack of gradient signal; SFT *has* the signal here
+yet the prior still dominates one field. The task design is sound (headroom was real
+and localized); the honest lesson is *which* conventions LoRA-SFT will and won't teach.
+
+### DPO email — a modest objective concision gain; subjective judge stays flat (ran live)
+
+`run_preference_email.py` ran on `gemini-2.5-flash` (`us-central1`, `epochs=3`,
+`beta=0.2`, n=15 held out). The pilot gate passed (base `mean_compression=1.12 ≥ 0.9`
+— the base *expands* drafts, real concision headroom):
+
+| Metric | Base | Tuned | Note |
+|---|---|---|---|
+| `mean_compression` (headline; lower = shorter) | 1.13 | **1.04** | base expands +13% → tuned +4% |
+| `compression_win_rate` (tuned strictly shorter than base) | — | 0.533 (8/15) | CI [0.267, 0.800] — not distinguishable from 0.5 at n=15 |
+| subjective judge `win_rate` (secondary) | — | 0.333 | judge still prefers the verbose base |
+
+DPO moved the exact axis it trains — `mean_compression` fell from +13% to +4% — but
+weakly: the per-draft "strictly shorter" rate is a coin flip at this sample size and
+the subjective judge, which a strong base already saturates, does not reward the
+extra concision. An honest before→after: the trained objective improves directionally,
+while the subjective axis a strong base dominates does not — the same theme as the
+SFT and RLFT results, that modern bases leave thin, uneven headroom.

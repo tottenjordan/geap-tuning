@@ -41,11 +41,17 @@ from geap_tuning.sft.extraction import (
 from geap_tuning.sft.extraction_eval import run_eval
 from geap_tuning.sft.tune import launch_sft_job
 
-# v2: the normalization-convention redesign (the v1 plain-extraction task saturated).
-DISPLAY_NAME = "geap-sft-json-extraction-v2"
+# v2 was the normalization-convention redesign (the v1 plain-extraction task saturated);
+# v3 retunes that same task with more gradient steps. At epochs=2/adapter=8 the tuned model
+# picked up the transforms the base half-knew (order_id stripping, city expansion) but never
+# memorized the fully-arbitrary priority P-code map (urgent→P0), so accuracy did not lift.
+# A larger adapter + more epochs give the capacity/steps to learn that arbitrary mapping.
+DISPLAY_NAME = "geap-sft-json-extraction-v3"
 BASE_MODEL = "gemini-2.5-flash"
-DATA_DIR = Path("datasets/sft_json_extraction_v2")
+DATA_DIR = Path("datasets/sft_json_extraction_v2")  # dataset unchanged from v2
 GCS_PREFIX = "sft_json_extraction_v2"
+EPOCHS = 6
+ADAPTER_SIZE = 16
 # The base must score BELOW this field-exact-match accuracy to have headroom worth
 # tuning. Above it, the base already applies our convention and there is little to teach.
 SAT_CEILING = 0.85
@@ -113,6 +119,8 @@ def main() -> None:
             val_uri=val_uri,
             display_name=DISPLAY_NAME,
             base_model=BASE_MODEL,
+            epochs=EPOCHS,
+            adapter_size=ADAPTER_SIZE,
             labels=cfg.labels,
         )
         print(f"Launched tuning job: {job.name}")
