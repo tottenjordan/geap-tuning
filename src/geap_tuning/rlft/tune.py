@@ -21,22 +21,29 @@ from geap_tuning.rlft import reward
 from geap_tuning.sft.tune import ADAPTER_MAP
 
 if TYPE_CHECKING:
+    from types import ModuleType
+
     from google import genai
 
 
 def build_reward_config(
     reward_name: str = "math_correctness",
+    *,
+    module: ModuleType = reward,
 ) -> types.SingleReinforcementTuningRewardConfig:
-    """Ship :mod:`geap_tuning.rlft.reward` verbatim as a code-execution reward scorer.
+    """Ship a reward ``module`` verbatim as a code-execution reward scorer.
 
     ``inspect.getsource`` pulls the exact, unit-tested module source so the reward
-    that runs in the sandbox is the same one the tests exercise — one function,
-    two uses (training reward + offline eval).
+    that runs in the sandbox is the same one the tests exercise — one module, two
+    uses (training reward + offline eval). Defaults to
+    :mod:`geap_tuning.rlft.reward`; pass ``module`` to ship a different scorer
+    (e.g. :mod:`geap_tuning.rlft.constraint_reward`). The module must be
+    self-contained (stdlib only) and expose ``evaluate(example, response)``.
     """
     return types.SingleReinforcementTuningRewardConfig(
         reward_name=reward_name,
         code_execution_reward_scorer=types.ReinforcementTuningCodeExecutionRewardScorer(
-            python_code_snippet=inspect.getsource(reward),
+            python_code_snippet=inspect.getsource(module),
         ),
     )
 

@@ -52,6 +52,9 @@ make dev               # uv sync --all-groups
 | Run the continuous-tuning demo | `uv run python examples/run_continuous_tuning.py` (requires live GCP + incurs tuning cost) |
 | Run the RLFT reward-types tour | `uv run python examples/run_rlft_reward_types.py` (requires live GCP + incurs tuning cost) |
 | Run the advanced-evaluation demo | `uv run python examples/run_advanced_eval.py` (requires live GCP + incurs tuning cost) |
+| Run the SFT JSON-extraction before→after | `uv run python examples/run_sft_extraction.py` (requires live GCP + incurs tuning cost) |
+| Run the DPO concise-email before→after | `uv run python examples/run_preference_email.py` (requires live GCP + incurs tuning cost) |
+| Run the RLFT constrained-generation before→after | `uv run python examples/run_rlft_constrained.py` (`--pilot-only` gates for free; requires live GCP + incurs tuning cost) |
 
 ## Tuning services
 
@@ -62,9 +65,9 @@ are not separate services — see [Checkpointing & continuous tuning](#checkpoin
 
 | Service | Learns from | Reach for it when… | Dataset record | Supported models | Example |
 |---|---|---|---|---|---|
-| **SFT** | labeled input→output examples | you can *demonstrate* the desired output (classification, extraction, summarization, domain queries); required for code models | gold `model` turn inside `contents` | 3.5 Flash · 3.1 Flash-Lite · 2.5 Pro · 2.5 Flash · 2.5 Flash-Lite | [`run_sft.py`](examples/run_sft.py) · [`01`](notebooks/01_sft.ipynb) |
-| **DPO** (preference) | preference pairs (chosen vs rejected) | quality/style is *subjective* and hard to label; best after an SFT pass | `completions` — two candidates, `score` 1/0 | 2.5 Flash · 2.5 Flash-Lite only | [`run_preference.py`](examples/run_preference.py) · [`02`](notebooks/02_preference_tuning.ipynb) |
-| **RLFT** | a programmable **reward** over generations | correctness/format/judge-score can be *scored* but not imitated (no single gold answer) | `references` (ground-truth map); **no** target completion | Pre-GA (`v1beta1`); docs recommend `gemini-3.5-flash` | [`run_rlft.py`](examples/run_rlft.py) · [`03`](notebooks/03_rlft.ipynb) |
+| **SFT** | labeled input→output examples | you can *demonstrate* the desired output (classification, extraction, summarization, domain queries); required for code models | gold `model` turn inside `contents` | 3.5 Flash · 3.1 Flash-Lite · 2.5 Pro · 2.5 Flash · 2.5 Flash-Lite | [`run_sft.py`](examples/run_sft.py) · [`01`](notebooks/01_sft.ipynb) · extraction: [`run_sft_extraction.py`](examples/run_sft_extraction.py) · [`17`](notebooks/17_sft_extraction.ipynb) |
+| **DPO** (preference) | preference pairs (chosen vs rejected) | quality/style is *subjective* and hard to label; best after an SFT pass | `completions` — two candidates, `score` 1/0 | 2.5 Flash · 2.5 Flash-Lite only | [`run_preference.py`](examples/run_preference.py) · [`02`](notebooks/02_preference_tuning.ipynb) · concise email: [`run_preference_email.py`](examples/run_preference_email.py) · [`18`](notebooks/18_preference_email.ipynb) |
+| **RLFT** | a programmable **reward** over generations | correctness/format/judge-score can be *scored* but not imitated (no single gold answer) | `references` (ground-truth map); **no** target completion | Pre-GA (`v1beta1`); docs recommend `gemini-3.5-flash` | [`run_rlft.py`](examples/run_rlft.py) · [`03`](notebooks/03_rlft.ipynb) · constrained gen: [`run_rlft_constrained.py`](examples/run_rlft_constrained.py) · [`19`](notebooks/19_rlft_constrained.ipynb) |
 
 - **Supervised fine-tuning (SFT)** teaches a new skill by imitating labeled
   `contents` (a user prompt plus a gold `model` turn). It's the go-to for

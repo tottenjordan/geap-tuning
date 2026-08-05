@@ -15,6 +15,7 @@ Curated links to durable notes for this repo. Keep this file **under 200 lines**
 - [Experiment tracking](experiment-tracking.md) — automatic tuning-metric curves vs. opt-in Vertex AI Experiments (SFT + RLFT tracked demos); the `val_uri`→`/eval_*` link.
 - [DOE & visualization](doe-and-visualization.md) — declarative SFT/DPO/RLFT sweep + idempotent orchestration; cross-run bars/curves, which metric comes from where, the `viz` group; the banking77 discriminating sweep + untuned baseline (before→after).
 - [Resource labels](resource-labels.md) — `LABEL_KEY`/`LABEL_VALUE` → `cfg.labels`; which SDK objects accept `labels` (tuning jobs + TensorBoard only), job labels propagate to Model/Endpoint, set-at-creation-only.
+- [Generative tuning demos in fresh domains](generative-tuning-domains.md) — before→after SFT (JSON extraction), DPO (concise email), RLFT (graded constrained generation); the graded-reward design that answers the two prior RLFT nulls.
 
 ## Diagrams
 
