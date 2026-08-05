@@ -16,7 +16,13 @@ sweep logs each run there) and [checkpointing](checkpoints-and-continuous-tuning
 [`examples/run_doe_dpo.py`](../../examples/run_doe_dpo.py) +
 [`examples/run_doe_rlft.py`](../../examples/run_doe_rlft.py) /
 [`notebooks/12_doe_dpo_rlft.ipynb`](../../notebooks/12_doe_dpo_rlft.ipynb) (DPO &
-RLFT sweeps), and the read-only
+RLFT hyperparameter sweeps),
+[`examples/run_doe_rlft_rewards.py`](../../examples/run_doe_rlft_rewards.py) /
+[`notebooks/15_doe_reward_types.ipynb`](../../notebooks/15_doe_reward_types.ipynb)
+(RLFT **reward-shape** sweep vs. an untuned baseline),
+[`examples/run_doe_rlft_reward_ranking.py`](../../examples/run_doe_rlft_reward_ranking.py) /
+[`notebooks/16_doe_reward_ranking.ipynb`](../../notebooks/16_doe_reward_ranking.ipynb)
+(the **rank-capable** redesign of that sweep — see below), and the read-only
 [`examples/run_multi_run_viz.py`](../../examples/run_multi_run_viz.py) /
 [`notebooks/11_multi_run_viz.ipynb`](../../notebooks/11_multi_run_viz.ipynb) (charts
 an already-tracked experiment — **zero tuning cost**).
@@ -79,6 +85,119 @@ Experiments logging, routed through [`experiments.py`](../../src/geap_tuning/exp
   `sweep.fixed`** (a declarative string-match reward here), and is **preflighted**
   once with `validate_reward_config` before the sweep spends money. Base model is
   `gemini-3.5-flash` (regional client only — the global endpoint excludes tuning).
+
+## Sweeping the reward *shape* (RLFT)
+
+`examples/run_doe_rlft_rewards.py` / `notebooks/15_doe_reward_types.ipynb` sweep the
+axis unique to RLFT — the reward **function** itself (string-match, code-execution,
+autorater, composite) — rather than a hyperparameter. Two constraints shape how:
+
+- **The reward can't be a grid axis.** A `reward_config` is a non-scalar object, so
+  it must ride in `sweep.fixed`, never `grid` (see the gotcha below). That means each
+  reward shape is its **own single-run `SweepConfig`** (empty grid → one run), all
+  pointed at one shared Experiment.
+- **Combine results under driver-owned labels, not `spec.name`.** Every empty-grid
+  `RunSpec.name` slugs to `"default"`, so `aggregate_results` (keyed by name) would
+  collide across shapes. The driver keeps its own `label → RunResult` mapping and
+  hand-builds the comparison rows (`{"run": label, "accuracy": ..., "content_accuracy":
+  ...}`) — the shape `plot_grouped_metric_bars(rows, metrics=(...))` consumes.
+- **Report two metrics, because reward shape decides whether the output contract is
+  learned.** `run_rlft_eval` returns both `accuracy` (reward-based, requires the
+  `Answer: <n>` marker) and `content_accuracy` (marker-agnostic — is the right number
+  anywhere in the reply, via `rlft.evaluate.content_correct`), from one generation
+  pass. Live, the format-only `string-match` reward produced a model that answered
+  every problem **correctly in prose** but never emitted the marker → `accuracy` 0.0,
+  `content_accuracy` 1.0. Rewards whose signal *is* the correctness check
+  (`code-exec`, `composite`) train the marker directly, so their two scores track.
+  Reporting only the marker-gated `accuracy` would read as "string-match failed" when
+  it actually solved the task — hence both columns and the grouped-bar chart.
+- **Idempotency still holds** because each shape has a distinct `sweep.name`
+  (`rew-string-match`, `rew-code-exec`, …) → distinct display name
+  `geap-doe-rew-<shape>-default`, so reruns reuse jobs.
+- **Untuned baseline needs a global inference client.** The before→after story adds
+  the untuned `gemini-3.5-flash` scored on the same split; Gemini 3.x *inference*
+  runs on the `global` endpoint, so the baseline uses
+  `genai_client(cfg, base_model=BASE_MODEL)` — a separate client from the regional
+  tuning one. The baseline is offline-only (not logged as an Experiments run).
+- **Autorater needs a fully-qualified judge path.** `build_autorater_reward_config`
+  requires `autorater_model="projects/<p>/locations/<l>/publishers/google/models/<m>"`;
+  bare names fail with an opaque "Internal error occurred for computing reward".
+
+No `doe.py` change was needed — this is entirely a composition of existing seams.
+
+### Making a reward-shape sweep actually *rank* (the ranking variant)
+
+The sweep above returned a **flat null result** — every shape *and* the untuned
+baseline scored 1.000 on both metrics — so `max(accuracy)` picked a "winner" only as
+a tie-break. That is a **design** failure, not a mechanics one: the sweep machinery
+worked, the *experiment* had nothing to measure.
+`examples/run_doe_rlft_reward_ranking.py` / `notebooks/16_doe_reward_ranking.ipynb`
+fix the design (same orchestration, no `doe.py` change) and are the pattern to copy
+for a rank-capable reward sweep. The requirements:
+
+- **Give the objective headroom — but know which levers actually exist.** A
+  reward-shape sweep only discriminates when the base *can't already* do the task. The
+  plan had three levers; only two are usable, and that asymmetry *is* the finding:
+  - **Neutral system instruction** (`NEUTRAL_SYSTEM_INSTRUCTION`) **drops the
+    `Answer: <n>` contract** → opens **format** headroom for the format-only
+    `string-match` reward. This was the intended load-bearing lever — but see the next
+    bullet: opening the headroom was *necessary and not sufficient*.
+  - **Harder, difficulty-tiered bank** (`HARD_MATH_PROBLEMS`, 150 multi-step problems,
+    computed answers) — kept for a larger, balanced test split.
+  - **A weaker base does not open correctness headroom.** Empirically, every base we
+    ran saturates the task: two pilots on `gemini-2.5-flash-lite` scored correctness
+    ≈ 0.93–0.97 on a competition-flavored bank, and `gemini-3.5-flash` scored 0.900.
+    GEAP docs also point to `gemini-3.5-flash` as the RLFT base (a 2.5 base is not
+    documented for RLFT — untested here), so there is no weaker RLFT base to fall back
+    to anyway. **Lesson: for RLFT on verifiable math, `correctness` cannot be made a
+    rankable axis — no reachable base has headroom on it. Rank on `format_rate`
+    (opened by the neutral instruction) and keep `correctness` as a saturated
+    control.** See also [environment.md](environment.md) (Gemini 3.x tuning is
+    regional) and [tuning-apis.md](tuning-apis.md).
+- **Headroom the policy can't *reach* is still not rankable — the sharper finding.**
+  The live run cleared the format gate (baseline `format_rate` 0.000, full headroom)
+  and yet **RLFT still could not teach the marker**: even `string-match`, whose reward
+  regex is the exact `Answer:` marker, left `format_rate` at 0.000 (verified by probing
+  the tuned endpoint). Root cause — the base emits the marker ≈0% of the time, so every
+  rollout for a prompt earns the same reward → **no advantage signal, no gradient.**
+  Policy-gradient RL *amplifies* behaviors the base already produces sometimes; it
+  **cannot bootstrap a from-scratch output format**. Teaching one needs an **SFT
+  warm-start** (so the base emits the marker at a nonzero rate) *before* RLFT can
+  reinforce it. **Lesson: "give the objective headroom" means headroom the base can
+  actually reach with nonzero probability — an axis at a hard 0.000 base rate is
+  unrankable by RL alone, not just by a saturated base.** This makes the ranking
+  variant a *second, deeper null* than the sibling saturation null.
+- **Gate on the axis that can move, before spending — but a passing gate isn't a
+  promise it will move.** Score the untuned base first and refuse to launch unless
+  *that* axis has headroom. Here the gate keys on `format_rate < 0.5` (correctness is
+  saturated by design — reported, not gated); `--pilot-only` runs the gate with **zero
+  tuning spend**. Necessary, not sufficient: the gate confirms headroom *exists*, not
+  that RL can *reach* it (see the previous bullet) — a hard-0.000 base rate passes the
+  gate yet stays unlearnable. A reward-shape DOE that skips the gate is a spend-first;
+  one that treats a passing gate as a guaranteed win is naive.
+- **Measure each objective on its own axis.** Different rewards optimize different
+  things, so one headline can't rank them. `run_rlft_multimetric_eval` returns
+  `format_rate` (marker present regardless of correctness — the *intended* primary
+  rank axis, the `string-match` target; in the live run it stayed 0.000 for every
+  shape, per the RL-bootstrap bullet above), `explanation_quality` (an **offline LLM
+  judge**, which must be a *different* model than any training autorater or it grades
+  with the trainer — here it pinned at 1.000, too lenient to separate shapes), and
+  `correctness` (marker-agnostic — a saturated control on this base), plus a per-tier
+  correctness breakdown — all from one generation pass. All three axes ending flat is
+  what makes this the deeper null.
+- **Rank with a confidence interval, not `max`.** `evaluate.bootstrap_ci(hits, n)` is
+  a seeded, stdlib-only bootstrap of the proportion, so "best shape" is reported with
+  whether the gap over the runner-up / baseline is significant. Even n≈30 gives wide
+  CIs on a binary metric — if axes still overlap, add test items before believing a
+  ranking.
+- **Non-scalar metrics are dropped from Experiments automatically.** The multimetric
+  dict carries a nested `by_difficulty`; `doe._numeric_metrics` keeps only scalar
+  numeric values, so it logs the axes and ignores the nested breakdown — no change
+  needed.
+
+The original saturating sweep is kept as the cautionary tale
+(`docs/doe/rlft-reward-shapes/`); the ranking variant lives at
+`docs/doe/rlft-reward-ranking/`.
 
 ## A discriminating SFT DOE + untuned baseline (banking77)
 

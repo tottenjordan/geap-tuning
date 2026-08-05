@@ -52,6 +52,9 @@ make dev               # uv sync --all-groups
 | Run the continuous-tuning demo | `uv run python examples/run_continuous_tuning.py` (requires live GCP + incurs tuning cost) |
 | Run the RLFT reward-types tour | `uv run python examples/run_rlft_reward_types.py` (requires live GCP + incurs tuning cost) |
 | Run the advanced-evaluation demo | `uv run python examples/run_advanced_eval.py` (requires live GCP + incurs tuning cost) |
+| Run the SFT JSON-extraction before→after | `uv run python examples/run_sft_extraction.py` (requires live GCP + incurs tuning cost) |
+| Run the DPO concise-email before→after | `uv run python examples/run_preference_email.py` (requires live GCP + incurs tuning cost) |
+| Run the RLFT constrained-generation before→after | `uv run python examples/run_rlft_constrained.py` (`--pilot-only` gates for free; requires live GCP + incurs tuning cost) |
 
 ## Tuning services
 
@@ -62,9 +65,9 @@ are not separate services — see [Checkpointing & continuous tuning](#checkpoin
 
 | Service | Learns from | Reach for it when… | Dataset record | Supported models | Example |
 |---|---|---|---|---|---|
-| **SFT** | labeled input→output examples | you can *demonstrate* the desired output (classification, extraction, summarization, domain queries); required for code models | gold `model` turn inside `contents` | 3.5 Flash · 3.1 Flash-Lite · 2.5 Pro · 2.5 Flash · 2.5 Flash-Lite | [`run_sft.py`](examples/run_sft.py) · [`01`](notebooks/01_sft.ipynb) |
-| **DPO** (preference) | preference pairs (chosen vs rejected) | quality/style is *subjective* and hard to label; best after an SFT pass | `completions` — two candidates, `score` 1/0 | 2.5 Flash · 2.5 Flash-Lite only | [`run_preference.py`](examples/run_preference.py) · [`02`](notebooks/02_preference_tuning.ipynb) |
-| **RLFT** | a programmable **reward** over generations | correctness/format/judge-score can be *scored* but not imitated (no single gold answer) | `references` (ground-truth map); **no** target completion | Pre-GA (`v1beta1`); docs recommend `gemini-3.5-flash` | [`run_rlft.py`](examples/run_rlft.py) · [`03`](notebooks/03_rlft.ipynb) |
+| **SFT** | labeled input→output examples | you can *demonstrate* the desired output (classification, extraction, summarization, domain queries); required for code models | gold `model` turn inside `contents` | 3.5 Flash · 3.1 Flash-Lite · 2.5 Pro · 2.5 Flash · 2.5 Flash-Lite | [`run_sft.py`](examples/run_sft.py) · [`01`](notebooks/01_sft.ipynb) · extraction: [`run_sft_extraction.py`](examples/run_sft_extraction.py) · [`17`](notebooks/17_sft_extraction.ipynb) |
+| **DPO** (preference) | preference pairs (chosen vs rejected) | quality/style is *subjective* and hard to label; best after an SFT pass | `completions` — two candidates, `score` 1/0 | 2.5 Flash · 2.5 Flash-Lite only | [`run_preference.py`](examples/run_preference.py) · [`02`](notebooks/02_preference_tuning.ipynb) · concise email: [`run_preference_email.py`](examples/run_preference_email.py) · [`18`](notebooks/18_preference_email.ipynb) |
+| **RLFT** | a programmable **reward** over generations | correctness/format/judge-score can be *scored* but not imitated (no single gold answer) | `references` (ground-truth map); **no** target completion | Pre-GA (`v1beta1`); docs recommend `gemini-3.5-flash` | [`run_rlft.py`](examples/run_rlft.py) · [`03`](notebooks/03_rlft.ipynb) · constrained gen: [`run_rlft_constrained.py`](examples/run_rlft_constrained.py) · [`19`](notebooks/19_rlft_constrained.ipynb) |
 
 - **Supervised fine-tuning (SFT)** teaches a new skill by imitating labeled
   `contents` (a user prompt plus a gold `model` turn). It's the go-to for
@@ -327,6 +330,23 @@ GEAP tracks tuning experiments at two levels — one you get for free, one you o
 Every Gemini tuning job launched here — SFT, DPO, and RLFT — automatically emits
 training/validation metrics that stream to the Cloud console in real time. View them
 under **Agent Platform Studio → Tune and Distill → _your tuned model_ → Monitor tab**.
+
+![GEAP tuning Monitor tab in the Cloud console for an SFT job: a "Tuning progress" bar showing 100% completed, three live metric charts (Accuracy, Number of predictions, Loss) each plotting the blue training curve against the pink validation curve over training steps with numbered per-epoch checkpoint markers and a starred default checkpoint, and a Checkpoints table listing each checkpoint's step, epoch, pre-deployed endpoint, and training/validation accuracy.](docs/imgs/sft-monitoring.png)
+
+The Monitor tab is **live tuning-progress monitoring with zero code** — it appears the
+moment the job starts and needs nothing beyond launching it. It gives you:
+
+- **Progress** — a status (`Running` / `Succeeded`) and a percent-complete bar, so you
+  can watch a long job advance without polling the SDK.
+- **Metric curves** — training (blue) vs. validation (pink) plotted over training steps,
+  so overfitting shows up as the two curves diverging. The exact metrics depend on the
+  method (table below).
+- **Per-epoch checkpoints** — numbered markers on each chart (and a starred **default
+  checkpoint**) line up the curves with the exported checkpoints, and the **Checkpoints
+  table** underneath lists every checkpoint's step, epoch, pre-deployed endpoint, and
+  train/validation accuracy — letting you eyeball which checkpoint peaked before you pick
+  one as the default (see [Checkpointing & continuous tuning](#checkpointing--continuous-tuning)).
+
 The metric set depends on the method:
 
 | Method | Training metrics | Validation metrics (only if a validation set is provided) |
@@ -411,7 +431,11 @@ runs are in [`examples/run_doe.py`](examples/run_doe.py) /
 [`examples/run_doe_dpo.py`](examples/run_doe_dpo.py) +
 [`examples/run_doe_rlft.py`](examples/run_doe_rlft.py) /
 [`notebooks/12_doe_dpo_rlft.ipynb`](notebooks/12_doe_dpo_rlft.ipynb) (DPO & RLFT — DPO
-headlines `win_rate`, RLFT carries its reward in `sweep.fixed`); the read-only
+headlines `win_rate`, RLFT carries its reward in `sweep.fixed`), and
+[`examples/run_doe_rlft_rewards.py`](examples/run_doe_rlft_rewards.py) /
+[`notebooks/15_doe_reward_types.ipynb`](notebooks/15_doe_reward_types.ipynb) (RLFT
+**reward-shape** sweep — string-match vs. code-exec vs. autorater vs. composite, each a
+single-run sweep in `sweep.fixed`, vs. an untuned baseline); the read-only
 [`run_multi_run_viz.py`](examples/run_multi_run_viz.py) /
 [`notebooks/11_multi_run_viz.ipynb`](notebooks/11_multi_run_viz.ipynb) chart an existing
 experiment at **zero tuning cost**. See

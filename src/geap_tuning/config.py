@@ -35,6 +35,11 @@ GLOBAL_LOCATION = "global"
 _GEMINI_MAJOR_RE = re.compile(r"gemini-(\d+)")
 _GEMINI_GLOBAL_MAJOR = 3
 
+# A tuned model's endpoint/model resource name embeds its own location, e.g.
+# ``projects/P/locations/us/endpoints/E``. For Gemini 3.x that location is the
+# ``us``/``eu`` multi-region — NOT the regional location the tuning job ran in.
+_ENDPOINT_LOCATION_RE = re.compile(r"/locations/([^/]+)/")
+
 
 @dataclass(frozen=True)
 class TuningConfig:
@@ -129,4 +134,31 @@ def genai_client(cfg: TuningConfig | None = None, *, base_model: str | None = No
     """
     cfg = cfg or load_config()
     location = resolve_location(cfg, base_model)
+    return genai.Client(vertexai=True, project=cfg.project, location=location)
+
+
+def endpoint_location(endpoint: str) -> str | None:
+    """Return the location embedded in a tuned endpoint/model resource name.
+
+    A tuned model is deployed to an endpoint whose resource name carries its own
+    location (``projects/P/locations/<loc>/endpoints/E``). For Gemini 3.x that is
+    the ``us``/``eu`` **multi-region**, not the regional location the tuning job
+    ran in — so inference must target that location or it 404s. Returns ``None``
+    for a bare endpoint id (no ``/locations/`` segment), letting callers fall back
+    to a default.
+    """
+    match = _ENDPOINT_LOCATION_RE.search(endpoint)
+    return match.group(1) if match else None
+
+
+def genai_client_for_endpoint(cfg: TuningConfig, endpoint: str) -> genai.Client:
+    """Build an **inference** client whose location matches a tuned ``endpoint``.
+
+    Thin factory: reads the location out of the endpoint resource name (see
+    :func:`endpoint_location`) so ``generate_content`` resolves it, falling back to
+    ``cfg.location`` when the name has no location segment. Use this to call any
+    tuned model — a regional (or ``global``) client cannot reach a tuned Gemini 3.x
+    endpoint, which lives in the ``us``/``eu`` multi-region.
+    """
+    location = endpoint_location(endpoint) or cfg.location
     return genai.Client(vertexai=True, project=cfg.project, location=location)

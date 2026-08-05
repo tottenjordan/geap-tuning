@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from google.genai import types
 
+from geap_tuning.rlft import constraint_reward
 from geap_tuning.rlft.tune import (
     build_autorater_reward_config,
     build_cloud_run_reward_config,
@@ -21,6 +22,14 @@ def test_build_reward_config_ships_reward_source() -> None:
     assert cfg.reward_name == "math_correctness"
     snippet = cfg.code_execution_reward_scorer.python_code_snippet
     assert "def evaluate(" in snippet  # the real reward source is shipped verbatim
+
+
+def test_build_reward_config_ships_custom_module() -> None:
+    cfg = build_reward_config("constraint_satisfaction", module=constraint_reward)
+    assert cfg.reward_name == "constraint_satisfaction"
+    snippet = cfg.code_execution_reward_scorer.python_code_snippet
+    assert "def evaluate(" in snippet
+    assert "def component_breakdown(" in snippet
 
 
 def test_build_string_match_reward_config() -> None:

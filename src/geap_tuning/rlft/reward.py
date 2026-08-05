@@ -18,7 +18,8 @@ _WRONG = -1.0
 _ANSWER_RE = re.compile(r"answer\s*[:=]\s*(-?[\d,]+(?:\.\d+)?)", re.IGNORECASE)
 
 
-def _normalize(value: str) -> str:
+def normalize_number(value: str) -> str:
+    """Normalize a numeric string for comparison (drop commas/trailing '.'/'.0')."""
     text = value.strip().replace(",", "").rstrip(".")
     return text.removesuffix(".0")
 
@@ -28,7 +29,7 @@ def extract_answer(text: str) -> str | None:
     matches = _ANSWER_RE.findall(text)
     if not matches:
         return None
-    return _normalize(matches[-1])
+    return normalize_number(matches[-1])
 
 
 def _response_text(response: dict[str, Any]) -> str:
@@ -43,4 +44,4 @@ def evaluate(example: dict[str, Any], response: dict[str, Any]) -> float:
     predicted = extract_answer(_response_text(response))
     if truth is None or predicted is None:
         return _WRONG
-    return _CORRECT if predicted == _normalize(truth) else _WRONG
+    return _CORRECT if predicted == normalize_number(truth) else _WRONG

@@ -4,6 +4,7 @@ import pytest
 
 from geap_tuning.config import (
     TuningConfig,
+    endpoint_location,
     load_config,
     requires_global_endpoint,
     resolve_location,
@@ -91,3 +92,18 @@ def test_resolve_location_keeps_region_for_older_models() -> None:
     cfg = TuningConfig(project="p", location="us-central1", bucket="gs://b")
     assert resolve_location(cfg, "gemini-2.5-flash") == "us-central1"
     assert resolve_location(cfg, None) == "us-central1"
+
+
+def test_endpoint_location_reads_multi_region_from_resource_name() -> None:
+    # Tuned Gemini 3.x endpoints land on the us/eu multi-region, not the region.
+    ep = "projects/934903580331/locations/us/endpoints/4327537029437980672"
+    assert endpoint_location(ep) == "us"
+
+
+def test_endpoint_location_reads_region_from_resource_name() -> None:
+    ep = "projects/p/locations/us-central1/endpoints/123"
+    assert endpoint_location(ep) == "us-central1"
+
+
+def test_endpoint_location_returns_none_for_bare_id() -> None:
+    assert endpoint_location("4327537029437980672") is None
