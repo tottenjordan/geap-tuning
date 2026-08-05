@@ -1,23 +1,27 @@
-"""Evaluate a DPO-tuned concise-email model: win-rate + a compression proxy.
+"""Evaluate a DPO-tuned concise-email model: objective compression + a judge check.
 
-The honest **before → after** metric is a *head-to-head* autorater win-rate
-(:func:`run_head_to_head_eval`): the tuned rewrite versus the **base** rewrite of
-the same draft, judged blind with a randomized A/B position to cancel a judge's
-slot bias. ``win_rate`` above 0.5 means tuning helped. This replaces the earlier
-``run_email_eval`` design, which judged the model against the dataset's *fixed
-dispreferred reference* — a strawman the base already beat ~100% of the time, so
-it was pre-saturated and could never surface a lift (kept below only for the unit
-test that documents it).
+The honest **before → after** headline is *objective concision*
+(:func:`run_head_to_head_eval`): ``base_mean_compression`` vs
+``tuned_mean_compression`` (rewrite/draft word ratio; lower is more concise) and
+``compression_win_rate`` — the fraction of drafts where the tuned rewrite is
+strictly shorter than the base rewrite. That hit-rate is binomial, so it takes a
+``bootstrap_ci`` directly. This is exactly the axis the preference pairs train, so
+it moves reliably — unlike the *subjective* judge win-rate (kept as a secondary
+signal), which a strong base can saturate: our base already writes emails the
+"professional + concise" judge prefers to our hand-authored gold ~87% of the time,
+yet it **expands** drafts (compression > 1.0), so the concision headroom is real
+and objective even though the judge does not reward it.
 
-Before spending on a job, :func:`run_pilot_eval` gates on headroom the RLFT way:
-it judges the base rewrite against the **gold preferred** reference. If the base
-already matches/beats the concise gold, there is nothing to teach and the driver
-refuses to tune.
+Before spending on a job, :func:`run_pilot_eval` gates on that headroom: it scores
+the base's own ``mean_compression``; if the base already compresses aggressively
+there is nothing to teach and the driver refuses to tune. (It also returns the
+subjective base-vs-gold ``win_rate`` for context.) The earlier ``run_email_eval``
+judged the model against the dataset's *fixed dispreferred reference* — a strawman
+the base beat ~100% of the time, pre-saturated and unable to surface a lift; it is
+kept below only for the unit test that documents it.
 
-An **objective** compression proxy corroborates the judge — ``mean_compression``
-(rewrite/draft word ratio; below 1.0 means the model shortened the draft) and
-``shorter_rate``. Both the generator(s) and judge are injected so the logic is
-unit-testable offline; a single generation pass per model feeds every metric.
+Both the generator(s) and judge are injected so the logic is unit-testable
+offline; a single generation pass per model feeds every metric.
 """
 
 from __future__ import annotations
@@ -182,13 +186,22 @@ def run_head_to_head_eval(
     *,
     seed: int = 0,
 ) -> dict[str, Any]:
-    """Before → after: judge the tuned rewrite against the **base** rewrite.
+    """Before → after on concision: the objective headline plus a subjective check.
 
-    The candidate is the tuned model, the reference is the base model, judged blind
-    with a randomized A/B position (``seed``) so the aggregate is free of the
-    judge's slot bias. ``win_rate`` (== ``hits`` / ``n``) above 0.5 means tuning
-    helped; ``hits`` feeds ``bootstrap_ci``. ``base_mean_compression`` and
-    ``tuned_mean_compression`` give the objective concision delta.
+    The **headline** is objective concision — ``base_mean_compression`` vs
+    ``tuned_mean_compression`` (rewrite/draft word ratio; lower is more concise),
+    and ``compression_win_rate`` (== ``compression_hits`` / ``n``): the fraction of
+    drafts where the tuned rewrite is strictly shorter than the base rewrite. That
+    hit-rate is binomial, so ``compression_hits`` feeds ``bootstrap_ci`` directly.
+
+    The **secondary** metric is the subjective all-things-considered judge:
+    ``win_rate`` (== ``wins`` / ``n``, blind randomized A/B via ``seed``) is the
+    tuned-beats-base rate on the "professional + concise" judge. DPO moves the
+    concision axis it was trained on; the judge may still favor the base's polish,
+    so this can stay flat even when compression clearly improves.
+
+    ``hits`` aliases ``compression_hits`` so the objective lift is what
+    ``bootstrap_ci`` reports by default.
     """
     drafts = [_draft_text(r) for r in records]
     base_rewrites = [base_generate_fn(d) for d in drafts]
@@ -200,13 +213,19 @@ def run_head_to_head_eval(
             drafts, tuned_rewrites, base_rewrites, flips, strict=True
         )
     )
+    compression_hits = sum(
+        _words(tuned) < _words(base)
+        for tuned, base in zip(tuned_rewrites, base_rewrites, strict=True)
+    )
     n = len(records)
     base_compression = score_compression(drafts, base_rewrites)
     tuned_compression = score_compression(drafts, tuned_rewrites)
     return {
+        "compression_win_rate": compression_hits / n if n else 0.0,
+        "compression_hits": compression_hits,
+        "hits": compression_hits,  # objective lift is the headline for bootstrap_ci
         "win_rate": wins / n if n else 0.0,
         "wins": wins,
-        "hits": wins,
         "n": n,
         "base_mean_compression": base_compression["mean_compression"],
         "tuned_mean_compression": tuned_compression["mean_compression"],

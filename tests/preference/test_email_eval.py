@@ -84,7 +84,11 @@ def test_head_to_head_tuned_wins_when_shorter() -> None:
 
     result = run_head_to_head_eval(records, base_gen, tuned_gen, _shorter_wins)
     assert result["win_rate"] == 1.0
-    assert result["wins"] == result["hits"] == 5
+    assert result["wins"] == 5
+    # The objective headline: tuned is strictly shorter than base in every item,
+    # and `hits` aliases the compression hits so bootstrap_ci reports the objective lift.
+    assert result["compression_win_rate"] == 1.0
+    assert result["compression_hits"] == result["hits"] == 5
     assert result["n"] == 5
     assert len(base_calls) == 5
     assert len(tuned_calls) == 5
@@ -105,6 +109,9 @@ def test_head_to_head_tuned_loses_when_longer() -> None:
     result = run_head_to_head_eval(records, base_gen, tuned_gen, _shorter_wins)
     assert result["win_rate"] == 0.0
     assert result["wins"] == 0
+    # The longer tuned rewrite is never shorter than base → objective lift is zero too.
+    assert result["compression_win_rate"] == 0.0
+    assert result["compression_hits"] == result["hits"] == 0
 
 
 def test_pilot_eval_base_loses_to_gold_when_longer() -> None:
