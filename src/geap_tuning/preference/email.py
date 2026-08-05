@@ -14,6 +14,11 @@ concision rather than substance, and the objective compression proxy in
 ``email_eval.py`` corroborates the win-rate. Hand-authored (not programmatic):
 prose quality is the whole point. Text-only; records use the shared preference
 builder in :mod:`geap_tuning.schemas`.
+
+The bank is deliberately sized (60 triples) so that the default ``0.25`` test
+ratio yields ~15 held-out drafts — enough for a meaningful ``bootstrap_ci`` on the
+head-to-head win-rate in ``email_eval.run_head_to_head_eval`` (an n of ~6, from an
+earlier 0.15 split, could not resolve a lift).
 """
 
 from __future__ import annotations
@@ -577,6 +582,407 @@ EMAIL_DRAFTS: list[tuple[str, str, str]] = [
             "sync up at some point to try and figure out exactly what happened there."
         ),
     ),
+    (
+        (
+            "hey so um i cant log into the vpn my password just expired i think and i honestly "
+            "have no idea how to reset it can someone maybe help me out"
+        ),
+        "My VPN password expired and I can't log in. Could someone help me reset it? Thanks.",
+        (
+            "Hey there! So um I'm honestly having this really annoying issue where I just "
+            "can't seem to log into the VPN at all, because I think my password sort of "
+            "expired on me, and honestly I have absolutely no idea how to go about resetting "
+            "the thing, so maybe if someone has a spare minute could they possibly help me out "
+            "with that? Thanks so much!"
+        ),
+    ),
+    (
+        (
+            "so hey um i was thinking maybe i could take like the week of the fifteenth off "
+            "for a family trip just wanted to check if thats okay with you honestly"
+        ),
+        (
+            "I'd like to take the week of the 15th off for a family trip. Please approve if "
+            "possible."
+        ),
+        (
+            "Hey! So um I was just sort of thinking, if it's okay with you honestly, that "
+            "maybe I could possibly take like the whole week of the fifteenth off, because my "
+            "family and I are planning this little trip together, and I really just wanted to "
+            "check in first to see if that time off would sort of work for you and the team, "
+            "so let me know whenever you get a chance!"
+        ),
+    ),
+    (
+        (
+            "hey so um that ticket i opened like three days ago about the billing portal is "
+            "still just sitting there and honestly no one has replied can we maybe bump it up"
+        ),
+        (
+            "The billing-portal ticket I opened three days ago has had no response. Could we "
+            "escalate it? Thanks."
+        ),
+        (
+            "Hey there! So um I just wanted to sort of follow up, because honestly that "
+            "support ticket I opened like three whole days ago about the billing portal is "
+            "still just kind of sitting there untouched, and nobody has really replied to it "
+            "at all yet, so I was wondering if maybe we could possibly bump it up the queue "
+            "somehow? Really appreciate it!"
+        ),
+    ),
+    (
+        (
+            "hi so um im applying for a new role and i was just wondering if maybe you might "
+            "be willing to be a reference for me honestly no pressure at all though"
+        ),
+        (
+            "I'm applying for a new role and would appreciate it if you'd serve as a "
+            "reference. No pressure."
+        ),
+        (
+            "Hi there! So um I'm honestly in the middle of applying for this new role right "
+            "now, and I was just sort of wondering, if it's not too much trouble at all, "
+            "whether maybe you might possibly be willing to be a reference for me? Honestly "
+            "there's absolutely no pressure whatsoever, so please feel totally free to say no "
+            "if you'd rather not!"
+        ),
+    ),
+    (
+        (
+            "hey so um we havent had a one on one in a while and i honestly have a few things "
+            "id maybe like to talk through can we sort of set one up"
+        ),
+        (
+            "We haven't had a 1:1 in a while and I have a few things to discuss. Could we "
+            "schedule one?"
+        ),
+        (
+            "Hey! So um it honestly feels like we haven't really had a proper one on one in "
+            "quite a while now, and I've sort of got a few different things piling up that I'd "
+            "maybe like to talk through with you at some point, so I was just wondering if we "
+            "could possibly set one up sometime soon whenever works for you?"
+        ),
+    ),
+    (
+        (
+            "hey so um i just typed up the notes from todays sync and i honestly wanted to "
+            "send them over so everyone sort of has a record of what we decided and stuff"
+        ),
+        "Attached are the notes from today's sync so everyone has a record of what we decided.",
+        (
+            "Hey there! So um I just went ahead and typed up all the notes from today's sync "
+            "meeting, and honestly I really wanted to get them sent over to everybody as soon "
+            "as possible, just so that the whole team sort of has some kind of written record "
+            "of everything we ended up discussing and deciding on during the call and stuff, "
+            "so here they are!"
+        ),
+    ),
+    (
+        (
+            "hey so um for the landing page i honestly still need the final logo files and "
+            "maybe the hero image from you guys whenever you sort of get a chance to send them"
+        ),
+        (
+            "For the landing page, I still need the final logo files and hero image. Could you "
+            "send them?"
+        ),
+        (
+            "Hey! So um for that landing page we've all been working on, I honestly still "
+            "really need to get my hands on the final logo files from you, and maybe also that "
+            "hero image too, whenever you or the design team sort of get a spare chance to dig "
+            "them up and send them over my way? Thanks a ton!"
+        ),
+    ),
+    (
+        (
+            "hey so um i think i maybe found something weird a shared spreadsheet has all our "
+            "customer emails in it and honestly anyone with the link can just open it"
+        ),
+        (
+            "A shared spreadsheet exposes all our customer emails to anyone with the link. "
+            "Please review this urgently."
+        ),
+        (
+            "Hey there! So um I think I maybe stumbled onto something kind of weird and "
+            "honestly a little concerning, because there's this shared spreadsheet floating "
+            "around that apparently has all of our customer emails just sitting right in it, "
+            "and honestly it looks like literally anyone who has the link can just go ahead "
+            "and open the whole thing up, so I figured I should flag it!"
+        ),
+    ),
+    (
+        (
+            "hey so um i was thinking maybe we could sort of stop doing the daily standup and "
+            "just do like two a week instead because honestly the daily one kinda eats our "
+            "time"
+        ),
+        (
+            "I suggest we switch from daily standups to twice weekly, since the daily meeting "
+            "is eating our time."
+        ),
+        (
+            "Hey! So um I was just sort of thinking the other day that maybe we could possibly "
+            "consider stopping the whole daily standup thing that we do, and instead just "
+            "switch over to doing like two of them per week or something, because honestly "
+            "that daily one kind of ends up eating a big chunk of everyone's time every single "
+            "morning, you know?"
+        ),
+    ),
+    (
+        (
+            "hi so um thanks for reaching out but honestly were not really looking at new "
+            "tools right now so i think im gonna have to sort of pass on the meeting for now"
+        ),
+        (
+            "Thank you for reaching out, but we aren't evaluating new tools right now, so I'll "
+            "pass for now."
+        ),
+        (
+            "Hi there! So um thank you so much for reaching out to me about all this, honestly "
+            "I really do appreciate it, but the thing is we're not really actively looking at "
+            "any new tools or solutions right at this particular moment in time, so I think "
+            "I'm probably just going to have to sort of respectfully pass on that meeting for "
+            "now, if that's alright!"
+        ),
+    ),
+    (
+        (
+            "hey so um i finished a first draft of the blog post and honestly id love it if "
+            "you could maybe take a quick look and just tell me what you sort of think"
+        ),
+        (
+            "I've finished a first draft of the blog post. Could you take a quick look and "
+            "share feedback?"
+        ),
+        (
+            "Hey! So um I finally went ahead and finished up a first rough draft of that blog "
+            "post we talked about, and honestly I would just really love it so much if you "
+            "could maybe find a little bit of time to take a quick look through it whenever "
+            "you can, and then just sort of let me know what you think about it overall?"
+        ),
+    ),
+    (
+        (
+            "hey so um i think were basically ready to ship the update maybe we could target "
+            "next tuesday for the release honestly unless that sort of clashes with anything"
+        ),
+        (
+            "We're ready to ship the update. Could we target next Tuesday for release, unless "
+            "that conflicts for you?"
+        ),
+        (
+            "Hey there! So um I honestly think we're pretty much basically ready to go ahead "
+            "and ship this update out the door now, so maybe we could sort of target something "
+            "like next Tuesday for the actual release date, unless of course that ends up "
+            "clashing with anything else that you've got going on over on your end of things? "
+            "Let me know!"
+        ),
+    ),
+    (
+        (
+            "hi so um i paid for the team lunch out of pocket last week it was like eighty "
+            "bucks and honestly i just wanted to check how i sort of get that reimbursed"
+        ),
+        "I paid $80 out of pocket for last week's team lunch. How do I get reimbursed?",
+        (
+            "Hi there! So um I ended up paying for the whole team lunch completely out of my "
+            "own pocket last week, and honestly it came out to something like eighty bucks or "
+            "so in total, so I just sort of wanted to check in with you and figure out what "
+            "the actual process is for getting all of that money reimbursed back to me? "
+            "Thanks!"
+        ),
+    ),
+    (
+        (
+            "hey so um the new contractor starts monday and honestly we should probably get "
+            "her a laptop and maybe set up her accounts before then so shes not sitting around"
+        ),
+        (
+            "Our new contractor starts Monday. We should provision her laptop and accounts "
+            "beforehand so she can start smoothly."
+        ),
+        (
+            "Hey! So um the new contractor we hired is honestly starting this coming Monday "
+            "already, so I think we should probably go ahead and get her set up with a laptop, "
+            "and maybe also sort of get all of her various accounts and access created before "
+            "then, just so that she isn't kind of left sitting around twiddling her thumbs and "
+            "waiting on us for stuff!"
+        ),
+    ),
+    (
+        (
+            "hey so um the client just asked for two extra features and honestly that sort of "
+            "goes way beyond what we originally agreed so we should talk about timeline and "
+            "cost"
+        ),
+        (
+            "The client requested two extra features beyond our original agreement. We should "
+            "discuss the timeline and cost impact."
+        ),
+        (
+            "Hey there! So um the client honestly just went ahead and asked us for like two "
+            "whole extra features out of nowhere, and that sort of goes way, way beyond what "
+            "we all originally agreed to at the very start of this project, so I really think "
+            "we should probably sit down together and talk through what this means for both "
+            "the timeline and the overall cost!"
+        ),
+    ),
+    (
+        (
+            "hey so um i cant get into the analytics dashboard i think i just dont have "
+            "permissions yet could you maybe add me whenever you sort of get a minute thanks"
+        ),
+        (
+            "I don't have access to the analytics dashboard yet. Could you grant me "
+            "permissions when you get a minute?"
+        ),
+        (
+            "Hey! So um I honestly can't seem to get myself into the analytics dashboard at "
+            "all right now, and I'm pretty sure it's just because I don't actually have the "
+            "right permissions set up for it yet, so I was wondering if maybe you could sort "
+            "of add me and grant me access whenever you happen to get a spare minute? Thanks "
+            "so much!"
+        ),
+    ),
+    (
+        (
+            "hi so um we honestly arent really using the analytics tool anymore so i think wed "
+            "like to just cancel our subscription before the next billing cycle sort of kicks "
+            "in"
+        ),
+        (
+            "We're no longer using the analytics tool and would like to cancel our "
+            "subscription before the next billing cycle."
+        ),
+        (
+            "Hi there! So um honestly we're not really using the analytics tool all that much "
+            "anymore these days, so I think what we'd like to do is just go ahead and cancel "
+            "our subscription entirely, and ideally we'd want to get that sorted out before "
+            "the next billing cycle sort of kicks in and charges us again! Could you help with "
+            "that?"
+        ),
+    ),
+    (
+        (
+            "hey so um i just wanted to say honestly thanks so much for all the advice this "
+            "year it really helped me a ton and i just sort of appreciate you a lot"
+        ),
+        (
+            "Thank you for all your advice this year. It helped me tremendously, and I truly "
+            "appreciate your mentorship."
+        ),
+        (
+            "Hey there! So um I just honestly really wanted to take a quick moment to say "
+            "thank you so, so much for absolutely all of the amazing advice and guidance "
+            "you've given me throughout this entire year, because it honestly helped me out a "
+            "whole ton in so many different ways, and I just sort of really appreciate you and "
+            "everything you've done a lot!"
+        ),
+    ),
+    (
+        (
+            "hey everyone so um starting next month were honestly gonna require everyone to "
+            "use the new expense app instead of the old spreadsheet so just a heads up i guess"
+        ),
+        (
+            "Starting next month, everyone must use the new expense app instead of the old "
+            "spreadsheet. Please plan accordingly."
+        ),
+        (
+            "Hey everyone! So um just wanted to give you all a little bit of a heads up here, "
+            "because starting next month we're honestly going to be requiring absolutely "
+            "everybody on the team to switch over to using the new expense app from now on, "
+            "instead of that old spreadsheet we've all been using forever, so yeah, just a "
+            "heads up on that I guess!"
+        ),
+    ),
+    (
+        (
+            "hi so um were making good progress but honestly a couple things came up and i was "
+            "wondering if maybe we could push the delivery date back by like a week or so"
+        ),
+        (
+            "We're making good progress, but a few issues arose. Could we push the delivery "
+            "date back one week?"
+        ),
+        (
+            "Hi there! So um I honestly wanted to let you know that we're actually making "
+            "really good progress on everything so far, but the thing is a couple of "
+            "unexpected little things sort of came up on our end recently, so I was just kind "
+            "of wondering whether maybe we could possibly push the delivery date back by like "
+            "a week or so? Thanks!"
+        ),
+    ),
+    (
+        (
+            "hey so um im honestly kind of stuck on the api integration because im still "
+            "waiting on credentials from the vendor so my part is sort of blocked until those "
+            "come through"
+        ),
+        (
+            "I'm blocked on the API integration until the vendor sends credentials. My part is "
+            "stalled until then."
+        ),
+        (
+            "Hey there! So um I just honestly wanted to flag that I'm sort of kind of stuck on "
+            "the whole API integration thing right now, mostly because I'm still sitting here "
+            "waiting around on those credentials from the vendor to finally come through, so "
+            "unfortunately my part of the project is basically blocked and can't really move "
+            "forward at all until those show up!"
+        ),
+    ),
+    (
+        (
+            "hey so um were hosting a webinar next thursday on data privacy stuff and honestly "
+            "i thought you might maybe be interested so just wanted to see if you wanna join"
+        ),
+        (
+            "We're hosting a webinar on data privacy next Thursday. I thought you might be "
+            "interested in joining."
+        ),
+        (
+            "Hey there! So um we're honestly going to be hosting this webinar next Thursday "
+            "all about data privacy and related stuff, and I just sort of thought that you "
+            "personally might maybe be pretty interested in that kind of topic, so I really "
+            "just wanted to reach out and see if you'd want to come along and join us for it? "
+            "Would be great to have you!"
+        ),
+    ),
+    (
+        (
+            "hey so um my team is honestly super stretched right now and i think we really "
+            "need to maybe hire another engineer could we talk about getting approval for "
+            "headcount"
+        ),
+        (
+            "My team is stretched thin and needs another engineer. Could we discuss approving "
+            "an additional headcount?"
+        ),
+        (
+            "Hey there! So um my team is honestly super, super stretched really thin right now "
+            "with everything on our plate, and I genuinely think that we probably really need "
+            "to go ahead and maybe hire on another engineer to help out, so I was just sort of "
+            "wondering if we could possibly find some time to talk about getting approval for "
+            "an extra headcount sometime soon?"
+        ),
+    ),
+    (
+        (
+            "hi so um i just wanted to say thanks again for the interview yesterday it was "
+            "honestly great chatting and i just wanted to reiterate that im really interested"
+        ),
+        (
+            "Thank you again for yesterday's interview. I enjoyed our conversation and remain "
+            "very interested in the role."
+        ),
+        (
+            "Hi there! So um I just honestly wanted to reach out and say thank you so much "
+            "once again for taking the time to interview me yesterday, because it was honestly "
+            "just really great getting a chance to chat with you all, and I also just sort of "
+            "wanted to reiterate and make it clear that I'm genuinely really interested in "
+            "this role! Hope to hear back soon!"
+        ),
+    ),
 ]
 
 
@@ -597,7 +1003,7 @@ def split_dataset(
     triples: list[tuple[str, str, str]],
     *,
     seed: int = 42,
-    ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
+    ratios: tuple[float, float, float] = (0.6, 0.15, 0.25),
 ) -> tuple[
     list[tuple[str, str, str]],
     list[tuple[str, str, str]],

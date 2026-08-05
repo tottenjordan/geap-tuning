@@ -17,7 +17,7 @@ def _words(text: str) -> int:
 
 
 def test_bank_is_nonempty_triples() -> None:
-    assert len(EMAIL_DRAFTS) >= 30
+    assert len(EMAIL_DRAFTS) >= 55  # sized so a 0.25 test split gives a usable n
     for triple in EMAIL_DRAFTS:
         assert len(triple) == 3
         assert all(isinstance(part, str) and part.strip() for part in triple)
@@ -54,7 +54,8 @@ def test_split_dataset_is_deterministic_partition() -> None:
     assert set(all_drafts) == {t[0] for t in EMAIL_DRAFTS}
     assert train
     assert val
-    assert test
+    # The test split must be large enough for a meaningful head-to-head win-rate CI.
+    assert len(test) >= 12
 
 
 def test_build_preference_dataset_writes_splits(tmp_path: Path) -> None:
