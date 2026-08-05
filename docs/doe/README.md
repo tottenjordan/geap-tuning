@@ -14,6 +14,7 @@ the **Writeup** column links the ones that have landed.
 | DOE | Question it answers | Example | Notebook | Writeup |
 |---|---|---|---|---|
 | SFT hyperparameters | Which `epochs` × `adapter_size` tunes the best classifier? | `examples/run_doe.py` | `notebooks/10_doe.ipynb` | _pending live run_ |
+| **SFT convention-teaching** | Can SFT teach a house normalization standard, and does `epochs` × `adapter_size` change *which* conventions it learns? | `examples/run_sft_extraction.py` | `notebooks/17_sft_extraction.ipynb` | [sft-extraction-convention](sft-extraction-convention/README.md) (discriminates *and* dissociates: v3 lifts rule-based fields to 1.0; the arbitrary `priority` relabel stays 0.0) |
 | DPO hyperparameters | Which `beta` × `epochs` wins the most A/B judgments? | `examples/run_doe_dpo.py` | `notebooks/12_doe_dpo_rlft.ipynb` | _pending live run_ |
 | RLFT hyperparameters | Which `epochs` × `samples_per_prompt` maximizes reward accuracy? | `examples/run_doe_rlft.py` | `notebooks/12_doe_dpo_rlft.ipynb` | _pending live run_ |
 | **RLFT reward shapes** | Which **reward function** produces the most accurate math model? | `examples/run_doe_rlft_rewards.py` | `notebooks/15_doe_reward_types.ipynb` | [rlft-reward-shapes](rlft-reward-shapes/README.md) (null result — the cautionary tale) |

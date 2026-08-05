@@ -162,6 +162,8 @@ it with an opaque code). A parallel to the RLFT nulls from the other side: RLFT 
 teach a from-scratch behavior for lack of gradient signal; SFT *has* the signal here
 yet the prior still dominates one field. The task design is sound (headroom was real
 and localized); the honest lesson is *which* conventions LoRA-SFT will and won't teach.
+The v2-vs-v3 sweep and the per-field chart are written up as a DOE:
+[`../doe/sft-extraction-convention/README.md`](../doe/sft-extraction-convention/README.md).
 
 ### DPO email — a modest objective concision gain; subjective judge stays flat (ran live)
 
