@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from geap_tuning import viz
-from geap_tuning.viz import _import_matplotlib, _import_pandas
+from geap_tuning.viz import _import_matplotlib, _import_pandas, save_figure
 
 ROWS = [
     {"run": "a", "epochs": 1, "accuracy": 0.7, "macro_f1": 0.6},
@@ -126,3 +126,22 @@ def test_plot_curves_one_line_per_run(fake_plt: MagicMock) -> None:
     result = viz.plot_curves(series, metric="accuracy")
     assert result is fig
     assert ax.plot.call_count == 2  # one line per run
+
+
+def test_save_figure_saves_then_closes(fake_plt: MagicMock) -> None:
+    # pyplot keeps every figure in a global registry, so a notebook re-running plot
+    # cells accumulates them toward the ">20 figures" warning.
+    fig = MagicMock()
+    save_figure(fig, "chart.png")
+    fig.savefig.assert_called_once()
+    assert fig.savefig.call_args.kwargs["bbox_inches"] == "tight"
+    fake_plt.close.assert_called_once_with(fig)
+
+
+def test_save_figure_allows_overriding_savefig_kwargs(fake_plt: MagicMock) -> None:
+    fig = MagicMock()
+    save_figure(fig, "chart.png", bbox_inches=None, dpi=200)
+    kwargs = fig.savefig.call_args.kwargs
+    assert kwargs["bbox_inches"] is None
+    assert kwargs["dpi"] == 200
+    fake_plt.close.assert_called_once_with(fig)

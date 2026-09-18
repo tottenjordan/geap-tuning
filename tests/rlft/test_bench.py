@@ -4,6 +4,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
 from geap_tuning.rlft.bench import (
     DIFFICULTIES,
     HARD_MATH_PROBLEMS,
@@ -24,7 +26,7 @@ def test_bank_is_balanced_unique_and_numeric() -> None:
     assert len(questions) == len(set(questions))
     # Every computed answer is a parseable number in canonical form.
     for problem in HARD_MATH_PROBLEMS:
-        assert float(problem.answer) == float(normalize_number(problem.answer))
+        assert float(problem.answer) == pytest.approx(float(normalize_number(problem.answer)))
 
 
 def test_neutral_instruction_omits_marker_contract() -> None:

@@ -28,6 +28,7 @@ from geap_tuning.viz import (
     normalize_experiment_rows,
     plot_grouped_metric_bars,
     plot_metric_bars,
+    save_figure,
 )
 
 DEFAULT_EXPERIMENT = "geap-doe-sft"
@@ -62,11 +63,11 @@ def main() -> None:
 
     grouped = plot_grouped_metric_bars(rows)
     grouped_path = out_dir / "multi_run_metrics.png"
-    grouped.savefig(grouped_path, bbox_inches="tight")
+    save_figure(grouped, grouped_path)
 
     accuracy = plot_metric_bars(rows, metric="accuracy")
     accuracy_path = out_dir / "multi_run_accuracy.png"
-    accuracy.savefig(accuracy_path, bbox_inches="tight")
+    save_figure(accuracy, accuracy_path)
 
     print(f"Saved {grouped_path} and {accuracy_path}")
 

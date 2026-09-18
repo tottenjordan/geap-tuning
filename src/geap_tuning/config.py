@@ -105,6 +105,16 @@ def load_config(env: dict[str, str] | None = None) -> TuningConfig:
         bucket = f"gs://{bucket}"
 
     location = _first(env, _LOCATION_KEYS) or _DEFAULT_LOCATION
+    if location == GLOBAL_LOCATION:
+        # `global` serves Gemini 3.x *inference* but does not support tuning, so a
+        # config resolving to it would fail later at job-launch time with a much
+        # less obvious error. `resolve_location` still routes inference clients to
+        # `global` when the model needs it; that is a per-call decision, not config.
+        msg = (
+            f"location {GLOBAL_LOCATION!r} does not support tuning; set "
+            f"{_LOCATION_KEYS[0]} to a region such as {_DEFAULT_LOCATION!r}"
+        )
+        raise ValueError(msg)
 
     # One resource label, attached to every resource we create (tuning jobs and
     # their generated model/endpoint, plus Managed TensorBoard). Both vars must

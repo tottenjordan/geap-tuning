@@ -71,7 +71,7 @@ def test_run_image_eval_scores_against_gold() -> None:
         image_gcs_uri_of(records[1]): "Oral Cancer",
     }
     metrics = run_image_eval(records, lambda r: predictions[image_gcs_uri_of(r)])
-    assert metrics["accuracy"] == 0.5
+    assert metrics["accuracy"] == pytest.approx(0.5)
     assert 0.0 <= metrics["macro_f1"] <= 1.0
     assert "report" in metrics
 
@@ -79,7 +79,7 @@ def test_run_image_eval_scores_against_gold() -> None:
 def test_run_image_eval_all_correct() -> None:
     records = [_record("ulcer", "a.jpg")]
     metrics = run_image_eval(records, lambda _r: "oral ulcer")
-    assert metrics["accuracy"] == 1.0
+    assert metrics["accuracy"] == pytest.approx(1.0)
 
 
 def test_select_best_experiment_picks_max_accuracy() -> None:

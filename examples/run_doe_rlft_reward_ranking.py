@@ -353,16 +353,19 @@ def main() -> None:
 
     # 9. Optional charts (needs the viz group): cross-axis + per-tier correctness.
     if plot:
-        from geap_tuning.viz import plot_grouped_metric_bars  # noqa: PLC0415 - opt-in dep
+        from geap_tuning.viz import (  # noqa: PLC0415 - opt-in dep
+            plot_grouped_metric_bars,
+            save_figure,
+        )
 
         fig = plot_grouped_metric_bars(rows, metrics=AXES)
         PLOT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(PLOT_PATH, bbox_inches="tight")
+        save_figure(fig, PLOT_PATH)
         print(f"\nSaved chart to {PLOT_PATH}")
 
         tier_rows = [_tier_row(run, metrics) for run, metrics in results_by_run.items()]
         tier_fig = plot_grouped_metric_bars(tier_rows, metrics=("easy", "medium", "hard"))
-        tier_fig.savefig(TIER_PLOT_PATH, bbox_inches="tight")
+        save_figure(tier_fig, TIER_PLOT_PATH)
         print(f"Saved per-tier chart to {TIER_PLOT_PATH}")
 
     # 10. The tuned shapes, read back from Experiments (baseline is offline-only).

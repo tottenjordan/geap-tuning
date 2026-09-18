@@ -3,6 +3,8 @@
 import ast
 from pathlib import Path
 
+import pytest
+
 from geap_tuning.rlft import constraint_reward
 from geap_tuning.rlft.constraint_reward import component_breakdown, evaluate
 
@@ -25,7 +27,7 @@ def test_all_constraints_met_scores_one() -> None:
         max_sentences="3",
     )
     text = "We launch the roadmap today. It ships soon."
-    assert evaluate({"references": refs}, _response(text)) == 1.0
+    assert evaluate({"references": refs}, _response(text)) == pytest.approx(1.0)
 
 
 def test_miss_exactly_one_component_is_fractional() -> None:
@@ -33,55 +35,57 @@ def test_miss_exactly_one_component_is_fractional() -> None:
     refs = _refs(required_keywords="alpha,beta,gamma,delta")
     text = "alpha beta gamma only"
     reward = evaluate({"references": refs}, _response(text))
-    assert reward == 0.75
+    assert reward == pytest.approx(0.75)
     assert 0.0 < reward < 1.0
 
 
 def test_forbidden_word_respects_word_boundary() -> None:
     # "every" must NOT trip the forbidden "very" check.
     refs = _refs(forbidden_words="very")
-    assert evaluate({"references": refs}, _response("every day counts")) == 1.0
-    assert evaluate({"references": refs}, _response("this is very good")) == 0.0
+    assert evaluate({"references": refs}, _response("every day counts")) == pytest.approx(1.0)
+    assert evaluate({"references": refs}, _response("this is very good")) == pytest.approx(0.0)
 
 
 def test_multi_word_keyword_phrase() -> None:
     refs = _refs(required_keywords="product launch")
-    assert evaluate({"references": refs}, _response("our product launch is ready")) == 1.0
-    assert evaluate({"references": refs}, _response("our product is ready")) == 0.0
+    assert evaluate(
+        {"references": refs}, _response("our product launch is ready")
+    ) == pytest.approx(1.0)
+    assert evaluate({"references": refs}, _response("our product is ready")) == pytest.approx(0.0)
 
 
 def test_open_ended_word_band_max_only() -> None:
     refs = _refs(max_words="3")
-    assert evaluate({"references": refs}, _response("one two three")) == 1.0
-    assert evaluate({"references": refs}, _response("one two three four")) == 0.0
+    assert evaluate({"references": refs}, _response("one two three")) == pytest.approx(1.0)
+    assert evaluate({"references": refs}, _response("one two three four")) == pytest.approx(0.0)
 
 
 def test_open_ended_word_band_min_only() -> None:
     refs = _refs(min_words="3")
-    assert evaluate({"references": refs}, _response("one two")) == 0.0
-    assert evaluate({"references": refs}, _response("one two three")) == 1.0
+    assert evaluate({"references": refs}, _response("one two")) == pytest.approx(0.0)
+    assert evaluate({"references": refs}, _response("one two three")) == pytest.approx(1.0)
 
 
 def test_sentence_counting() -> None:
     refs = _refs(min_sentences="3", max_sentences="3")
-    assert evaluate({"references": refs}, _response("A. B! C?")) == 1.0
-    assert evaluate({"references": refs}, _response("A. B!")) == 0.0
+    assert evaluate({"references": refs}, _response("A. B! C?")) == pytest.approx(1.0)
+    assert evaluate({"references": refs}, _response("A. B!")) == pytest.approx(0.0)
 
 
 def test_content_wrapper_is_unwrapped() -> None:
     refs = _refs(required_keywords="hello")
     response = {"content": {"parts": [{"text": "well hello there"}]}}
-    assert evaluate({"references": refs}, response) == 1.0
+    assert evaluate({"references": refs}, response) == pytest.approx(1.0)
 
 
 def test_partial_references_counts_present_only() -> None:
     # Only forbidden present: one component, satisfied → 1.0.
     refs = _refs(forbidden_words="stuff")
-    assert evaluate({"references": refs}, _response("clean prose here")) == 1.0
+    assert evaluate({"references": refs}, _response("clean prose here")) == pytest.approx(1.0)
 
 
 def test_empty_references_scores_one() -> None:
-    assert evaluate({"references": {}}, _response("anything")) == 1.0
+    assert evaluate({"references": {}}, _response("anything")) == pytest.approx(1.0)
 
 
 def test_breakdown_sum_matches_evaluate() -> None:

@@ -220,10 +220,13 @@ def main() -> None:
 
     # 9. Optional chart (needs the viz group): grouped bars for both metrics.
     if plot:
-        from geap_tuning.viz import plot_grouped_metric_bars  # noqa: PLC0415 - opt-in dep
+        from geap_tuning.viz import (  # noqa: PLC0415 - opt-in dep
+            plot_grouped_metric_bars,
+            save_figure,
+        )
 
         fig = plot_grouped_metric_bars(rows, metrics=(METRIC, CONTENT_METRIC))
-        fig.savefig(PLOT_PATH, bbox_inches="tight")
+        save_figure(fig, PLOT_PATH)
         print(f"Saved chart to {PLOT_PATH}")
 
     # 10. The tuned shapes, read back from Experiments (baseline is offline-only).

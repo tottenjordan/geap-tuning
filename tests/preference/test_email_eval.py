@@ -1,5 +1,7 @@
 """Tests for the concise-email eval scorer (win-rate + compression)."""
 
+import pytest
+
 from geap_tuning.preference.email import EMAIL_DRAFTS, build_preference_records
 from geap_tuning.preference.email_eval import (
     run_email_eval,
@@ -19,7 +21,7 @@ def test_compression_mean_below_one_when_shorter() -> None:
     rewrites = ["one two three", "a b"]
     result = score_compression(drafts, rewrites)
     assert result["mean_compression"] < 1.0
-    assert result["shorter_rate"] == 1.0
+    assert result["shorter_rate"] == pytest.approx(1.0)
     assert result["n"] == 2
 
 
@@ -27,13 +29,13 @@ def test_compression_shorter_rate_partial() -> None:
     drafts = ["one two three four", "a b"]
     rewrites = ["one two", "a b c d"]  # first shorter, second longer
     result = score_compression(drafts, rewrites)
-    assert result["shorter_rate"] == 0.5
+    assert result["shorter_rate"] == pytest.approx(0.5)
 
 
 def test_compression_empty_inputs() -> None:
     result = score_compression([], [])
-    assert result["mean_compression"] == 0.0
-    assert result["shorter_rate"] == 0.0
+    assert result["mean_compression"] == pytest.approx(0.0)
+    assert result["shorter_rate"] == pytest.approx(0.0)
     assert result["n"] == 0
 
 
@@ -42,7 +44,7 @@ def test_compression_skips_zero_word_draft() -> None:
     rewrites = ["hello", "one two"]
     result = score_compression(drafts, rewrites)
     # The empty draft is skipped from the ratio (no ZeroDivision), n still counts it.
-    assert result["mean_compression"] == 0.5
+    assert result["mean_compression"] == pytest.approx(0.5)
     assert result["n"] == 2
 
 
@@ -58,7 +60,7 @@ def test_run_email_eval_merges_metrics() -> None:
         return "A"  # tuned candidate always wins
 
     result = run_email_eval(records, generate_fn, judge_fn)
-    assert result["win_rate"] == 1.0
+    assert result["win_rate"] == pytest.approx(1.0)
     assert "mean_compression" in result
     assert result["n"] == 4
     # generate_fn called exactly once per record.
@@ -83,11 +85,11 @@ def test_head_to_head_tuned_wins_when_shorter() -> None:
         return "short"
 
     result = run_head_to_head_eval(records, base_gen, tuned_gen, _shorter_wins)
-    assert result["win_rate"] == 1.0
+    assert result["win_rate"] == pytest.approx(1.0)
     assert result["wins"] == 5
     # The objective headline: tuned is strictly shorter than base in every item,
     # and `hits` aliases the compression hits so bootstrap_ci reports the objective lift.
-    assert result["compression_win_rate"] == 1.0
+    assert result["compression_win_rate"] == pytest.approx(1.0)
     assert result["compression_hits"] == result["hits"] == 5
     assert result["n"] == 5
     assert len(base_calls) == 5
@@ -107,10 +109,10 @@ def test_head_to_head_tuned_loses_when_longer() -> None:
         return "this tuned rewrite is definitely quite a bit longer than the base one"
 
     result = run_head_to_head_eval(records, base_gen, tuned_gen, _shorter_wins)
-    assert result["win_rate"] == 0.0
+    assert result["win_rate"] == pytest.approx(0.0)
     assert result["wins"] == 0
     # The longer tuned rewrite is never shorter than base → objective lift is zero too.
-    assert result["compression_win_rate"] == 0.0
+    assert result["compression_win_rate"] == pytest.approx(0.0)
     assert result["compression_hits"] == result["hits"] == 0
 
 
@@ -125,7 +127,7 @@ def test_pilot_eval_base_loses_to_gold_when_longer() -> None:
         return "this base rewrite is quite a lot longer than the gold reference is by a wide margin"
 
     result = run_pilot_eval(records, gen, _shorter_wins)
-    assert result["win_rate"] == 0.0
+    assert result["win_rate"] == pytest.approx(0.0)
     assert result["n"] == 5
     assert len(calls) == 5
 
@@ -138,4 +140,4 @@ def test_pilot_eval_base_wins_when_shorter() -> None:
         return "ok"
 
     result = run_pilot_eval(records, gen, _shorter_wins)
-    assert result["win_rate"] == 1.0
+    assert result["win_rate"] == pytest.approx(1.0)
