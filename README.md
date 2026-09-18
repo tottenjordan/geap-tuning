@@ -44,6 +44,7 @@ make dev               # uv sync --all-groups
 | Run tests | `make test` |
 | Single test | `uv run pytest tests/test_smoke.py::test_main_runs` |
 | Provision GCP resources | `./scripts/bootstrap_gcp.sh` (enables APIs + creates the region-matched bucket; idempotent, needs `gcloud auth login` first) |
+| Reclaim endpoint quota | `./scripts/cleanup_endpoints.sh` (dry run by default; one endpoint per exported checkpoint accumulates fast — see [endpoints & cost](docs/notes/endpoints-and-cost.md)) |
 | Run the SFT example | `uv run python examples/run_sft.py` (requires live GCP + incurs tuning cost) |
 | Run the multimodal image SFT sweep | `uv sync --group vision && uv run python examples/run_sft_vision.py` (requires live GCP + a Kaggle token + incurs tuning cost) |
 | Run the DPO example | `uv run python examples/run_preference.py` (requires live GCP + incurs tuning cost) |
@@ -471,7 +472,7 @@ geap-tuning/
 ├── docs/
 │   ├── notes/                   # durable session notes (indexed by notes/README.md)
 │   └── imgs/                    # reference-architecture + workflow diagrams
-├── scripts/                     # bootstrap_gcp.sh — enable APIs + create the region bucket
+├── scripts/                     # bootstrap_gcp.sh (create) + cleanup_endpoints.sh (teardown)
 ├── CLAUDE.md                    # guidance for AI agents
 ├── CODE_STANDARDS.md            # uv / ruff / ty / pytest non-negotiables
 ├── Makefile                     # dev · lint · format · test
