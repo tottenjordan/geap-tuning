@@ -17,19 +17,7 @@ from geap_tuning.jobs import (
     tuned_model_name,
     wait_for_tuning_job,
 )
-
-
-def _job(endpoint: str | None = None, model: str | None = None) -> SimpleNamespace:
-    return SimpleNamespace(tuned_model=SimpleNamespace(endpoint=endpoint, model=model))
-
-
-def _checkpoint(checkpoint_id: str, *, endpoint: str = "") -> SimpleNamespace:
-    return SimpleNamespace(
-        checkpoint_id=checkpoint_id,
-        epoch=1,
-        step=10,
-        endpoint=endpoint,
-    )
+from tests.conftest import make_checkpoint, make_job
 
 
 def _job_with_checkpoints(
@@ -43,13 +31,13 @@ def _job_with_checkpoints(
 
 
 def test_tuned_endpoint_prefers_endpoint() -> None:
-    assert tuned_endpoint(_job(endpoint="ep", model="m")) == "ep"
-    assert tuned_endpoint(_job(model="m")) == "m"
+    assert tuned_endpoint(make_job(endpoint="ep", model="m")) == "ep"
+    assert tuned_endpoint(make_job(endpoint=None, model="m")) == "m"
 
 
 def test_tuned_endpoint_raises_when_missing() -> None:
     with pytest.raises(ValueError, match="no tuned endpoint"):
-        tuned_endpoint(_job())
+        tuned_endpoint(make_job(endpoint=None))
 
 
 def test_find_by_display_name_returns_match() -> None:
@@ -96,7 +84,7 @@ def test_wait_raises_on_failed(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_list_checkpoints_returns_list() -> None:
-    ckpts = [_checkpoint("1"), _checkpoint("2")]
+    ckpts = [make_checkpoint("1"), make_checkpoint("2")]
     assert list_checkpoints(_job_with_checkpoints(ckpts)) == ckpts
 
 
@@ -111,19 +99,19 @@ def test_list_checkpoints_empty_when_attr_absent() -> None:
 
 def test_checkpoint_endpoint_returns_match() -> None:
     job = _job_with_checkpoints(
-        [_checkpoint("1", endpoint="ep1"), _checkpoint("2", endpoint="ep2")]
+        [make_checkpoint("1", endpoint="ep1"), make_checkpoint("2", endpoint="ep2")]
     )
     assert checkpoint_endpoint(job, "2") == "ep2"
 
 
 def test_checkpoint_endpoint_raises_when_not_found() -> None:
-    job = _job_with_checkpoints([_checkpoint("1", endpoint="ep1")])
+    job = _job_with_checkpoints([make_checkpoint("1", endpoint="ep1")])
     with pytest.raises(ValueError, match="No checkpoint"):
         checkpoint_endpoint(job, "9")
 
 
 def test_checkpoint_endpoint_raises_when_endpoint_empty() -> None:
-    job = _job_with_checkpoints([_checkpoint("1", endpoint="")])
+    job = _job_with_checkpoints([make_checkpoint("1", endpoint="")])
     with pytest.raises(ValueError, match="no endpoint"):
         checkpoint_endpoint(job, "1")
 

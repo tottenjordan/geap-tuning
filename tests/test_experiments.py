@@ -1,8 +1,9 @@
 """Tests for Vertex AI Experiments / Managed TensorBoard tracking helpers.
 
-The ``aiplatform`` module is monkeypatched with a ``MagicMock`` (mirroring
-``tests/test_jobs.py`` patching ``geap_tuning.jobs.time.sleep``), so nothing here
-touches live GCP; assertions inspect the recorded call args.
+The ``_import_aiplatform`` shim is monkeypatched to hand back a ``MagicMock``
+(mirroring ``tests/test_viz.py`` patching ``viz._import_matplotlib``), so nothing
+here touches live GCP — or even imports the real SDK, which costs ~4.3s.
+Assertions inspect the recorded call args.
 """
 
 from types import SimpleNamespace
@@ -17,8 +18,22 @@ from geap_tuning import experiments
 @pytest.fixture
 def fake_aiplatform(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     mock = MagicMock()
-    monkeypatch.setattr("geap_tuning.experiments.aiplatform", mock)
+    monkeypatch.setattr(experiments, "_import_aiplatform", lambda: mock)
     return mock
+
+
+def test_import_aiplatform_defers_to_importlib(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The shim resolves the real module name without importing it at module scope."""
+    sentinel = object()
+    requested: list[str] = []
+
+    def fake_import(name: str) -> object:
+        requested.append(name)
+        return sentinel
+
+    monkeypatch.setattr(experiments.importlib, "import_module", fake_import)
+    assert experiments._import_aiplatform() is sentinel  # noqa: SLF001 - shim under test
+    assert requested == ["google.cloud.aiplatform"]
 
 
 def test_init_experiment_forwards_kwargs(fake_aiplatform: MagicMock) -> None:

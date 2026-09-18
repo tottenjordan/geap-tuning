@@ -17,7 +17,33 @@ How this project's Python toolchain is wired, and the non-obvious decisions behi
 
 ## Verified green
 
-`make lint`, `make test` and `make build` all pass on CPython 3.12.3 (304 tests,
+`make lint`, `make test` and `make build` all pass on CPython 3.12.3 (305 tests,
 98% coverage; sdist + wheel build with the `uv_build` backend). Re-verified
 2026-09-18 after upgrading every dependency to its latest compatible version —
 notably `google-cloud-aiplatform` 1.x → 2.x.
+
+CI runs the same three commands as one job (`.github/workflows/ci.yml`). The
+repo is **public**, so Actions minutes are free and unlimited — the job is kept
+minimal for signal, not for billing.
+
+## Test-suite performance (measured 2026-09-18)
+
+**Almost none of the runtime is the tests.** Of a ~7.5s run before optimization:
+~5.9s was module imports at collection, ~1.1s coverage, and **~0.5s actual test
+execution**. The slowest single test is 0.04s, so optimizing test bodies is
+pointless. Two things follow:
+
+- **`google.cloud.aiplatform` is lazy-imported** in `experiments.py` behind
+  `_import_aiplatform()`. It costs ~4.3s to import (roughly doubled in the 1.x →
+  2.x bump) and `doe.py` imports `experiments`, so every test paid it. Deferring
+  it took `make test` from 7.5s to ~4.4s. `google.genai` (~1.6s) is deliberately
+  left eager: it spans six modules and its types appear throughout the launcher
+  signatures, which is code that doubles as teaching material.
+- **Do not add `pytest-xdist`.** Measured: serial 6.37s, `-n 2` 10.34s, `-n 4`
+  8.48s, `-n 8` 9.10s. With ~0.5s of parallelizable work and a multi-second
+  import cost every worker re-pays, parallelism is slower at every worker count.
+
+Also ruled out as bottlenecks: no database, no Docker, no network, no file
+logging. Tests write ~450 tmp files per run (mostly `sft_vision/test_data.py`
+synthetic images) at ~0.1s total; local disk measures 300 MB/s, so a hosted
+runner would be slower, not faster, thanks to cold dependency downloads.
