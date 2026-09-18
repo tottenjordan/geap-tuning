@@ -62,6 +62,12 @@ ignore = ["D", "COM812", "CPY001", "T201"]
 addopts = "--cov=geap_tuning --cov-report=term-missing"
 testpaths = ["tests"]
 
+[tool.coverage.run]
+# Measure via PEP 669 sys.monitoring (needs Python 3.12+, which this project
+# requires) instead of the legacy settrace backend: same numbers, roughly half
+# the wall time. Not compatible with branch coverage, which we don't use.
+core = "sysmon"
+
 [tool.ty.terminal]
 error-on-warning = true
 
