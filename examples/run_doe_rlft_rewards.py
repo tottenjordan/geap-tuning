@@ -59,6 +59,7 @@ from geap_tuning.rlft.tune import (
     build_composite_reward_config,
     build_reward_config,
     build_string_match_reward_config,
+    raise_for_invalid_reward,
     validate_reward_config,
 )
 
@@ -142,14 +143,16 @@ def main() -> None:
 
     # 3. Preflight every reward on one record before spending money.
     for label, sweep in shapes:
-        preflight = validate_reward_config(
-            client,
-            project=cfg.project,
-            location=cfg.location,
-            sample_answer="Answer: 4",
-            example_record=train_records[0],
-            reward_config=sweep.fixed.get("reward_config"),
-            composite_reward_config=sweep.fixed.get("composite_reward_config"),
+        preflight = raise_for_invalid_reward(
+            validate_reward_config(
+                client,
+                project=cfg.project,
+                location=cfg.location,
+                sample_answer="Answer: 4",
+                example_record=train_records[0],
+                reward_config=sweep.fixed.get("reward_config"),
+                composite_reward_config=sweep.fixed.get("composite_reward_config"),
+            )
         )
         print(f"Preflight [{label}]: {preflight}")
 

@@ -1,5 +1,6 @@
 """Tests for tuning job monitoring and helpers."""
 
+import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -11,6 +12,7 @@ from geap_tuning.jobs import (
     checkpoint_endpoint,
     find_tuning_job_by_display_name,
     get_default_checkpoint_id,
+    job_training_uri,
     list_checkpoints,
     set_default_checkpoint,
     tuned_endpoint,
@@ -241,3 +243,76 @@ def test_wait_surfaces_the_sdk_error_detail(monkeypatch: pytest.MonkeyPatch) -> 
 
     with pytest.raises(RuntimeError, match="quota exceeded for adapter size 16"):
         wait_for_tuning_job(client, "n", poll_interval=0)
+
+
+# --- reuse: recency + dataset awareness (W-6) -----------------------------------
+
+
+def _listed(display_name: str, *, created: int, uri: str | None = None, name: str = "j") -> object:
+    spec = SimpleNamespace(training_dataset_uri=uri) if uri else None
+    return SimpleNamespace(
+        name=name,
+        tuned_model_display_name=display_name,
+        state="JOB_STATE_SUCCEEDED",
+        create_time=datetime.datetime(2026, 1, created, tzinfo=datetime.UTC),
+        supervised_tuning_spec=spec,
+        preference_optimization_spec=None,
+        reinforcement_tuning_spec=None,
+    )
+
+
+def test_find_returns_the_most_recent_match() -> None:
+    # A FAILED job triggers a relaunch under the same name, so duplicates happen.
+    client = MagicMock()
+    client.tunings.list.return_value = [
+        _listed("d", created=1, name="old"),
+        _listed("d", created=9, name="new"),
+        _listed("d", created=5, name="mid"),
+    ]
+    assert find_tuning_job_by_display_name(client, "d").name == "new"
+
+
+def test_find_tolerates_a_missing_create_time() -> None:
+    client = MagicMock()
+    undated = _listed("d", created=1, name="undated")
+    undated.create_time = None
+    client.tunings.list.return_value = [undated, _listed("d", created=2, name="dated")]
+    assert find_tuning_job_by_display_name(client, "d").name == "dated"
+
+
+def test_find_skips_a_job_trained_on_a_different_dataset() -> None:
+    client = MagicMock()
+    client.tunings.list.return_value = [_listed("d", created=1, uri="gs://b/old.jsonl")]
+    assert find_tuning_job_by_display_name(client, "d", train_uri="gs://b/new.jsonl") is None
+
+
+def test_find_reuses_a_job_trained_on_the_same_dataset() -> None:
+    client = MagicMock()
+    client.tunings.list.return_value = [_listed("d", created=1, uri="gs://b/t.jsonl", name="ok")]
+    found = find_tuning_job_by_display_name(client, "d", train_uri="gs://b/t.jsonl")
+    assert found.name == "ok"
+
+
+def test_find_reuses_when_the_job_reports_no_uri() -> None:
+    # Absent metadata must not silently block reuse of an otherwise-valid job.
+    client = MagicMock()
+    client.tunings.list.return_value = [_listed("d", created=1, name="nouri")]
+    assert find_tuning_job_by_display_name(client, "d", train_uri="gs://b/t.jsonl").name == "nouri"
+
+
+def test_job_training_uri_reads_each_method_spec() -> None:
+    def job(**specs: object) -> SimpleNamespace:
+        base = {
+            "supervised_tuning_spec": None,
+            "preference_optimization_spec": None,
+            "reinforcement_tuning_spec": None,
+        }
+        return SimpleNamespace(**{**base, **specs})
+
+    sft = job(supervised_tuning_spec=SimpleNamespace(training_dataset_uri="gs://b/sft"))
+    dpo = job(preference_optimization_spec=SimpleNamespace(training_dataset_uri="gs://b/dpo"))
+    rlft = job(reinforcement_tuning_spec=SimpleNamespace(training_dataset_uri="gs://b/rlft"))
+    assert job_training_uri(sft) == "gs://b/sft"
+    assert job_training_uri(dpo) == "gs://b/dpo"
+    assert job_training_uri(rlft) == "gs://b/rlft"
+    assert job_training_uri(job()) is None

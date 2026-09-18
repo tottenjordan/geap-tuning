@@ -133,7 +133,7 @@ def main() -> None:
 
     # 4. Reuse an existing job if one exists; otherwise launch. A firmer pull toward
     # the preferred (shorter) completion than the defaults (epochs=2, beta=0.1).
-    job = find_tuning_job_by_display_name(client, DISPLAY_NAME)
+    job = find_tuning_job_by_display_name(client, DISPLAY_NAME, train_uri=train_uri)
     if job is None:
         job = launch_preference_job(
             client,

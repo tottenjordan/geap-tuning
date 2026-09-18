@@ -48,7 +48,7 @@ from geap_tuning.rlft.data import (
     split_dataset,
 )
 from geap_tuning.rlft.evaluate import run_rlft_eval
-from geap_tuning.rlft.tune import launch_rlft_job, validate_reward_config
+from geap_tuning.rlft.tune import launch_rlft_job, raise_for_invalid_reward, validate_reward_config
 from geap_tuning.sft.tune import launch_sft_job
 
 VERSION = "v1"
@@ -78,7 +78,7 @@ def main() -> None:
     sft_val = upload_file(sft_paths["val"], f"{cfg.bucket}/cont_sft/val.jsonl")
     sft_name = f"geap-cont-sft-{VERSION}"
 
-    sft_job = find_tuning_job_by_display_name(client, sft_name)
+    sft_job = find_tuning_job_by_display_name(client, sft_name, train_uri=sft_train)
     if sft_job is None:
         sft_job = launch_sft_job(
             client,
@@ -98,12 +98,14 @@ def main() -> None:
     # === Stage 2: RLFT continued from the SFT model ===
     rlft_paths = build_rlft_dataset(RLFT_DIR)
     train_records = build_rlft_records(split_dataset(MATH_PROBLEMS)[0])
-    preflight = validate_reward_config(
-        client,
-        project=cfg.project,
-        location=cfg.location,
-        sample_answer="Answer: 4",
-        example_record=train_records[0],
+    preflight = raise_for_invalid_reward(
+        validate_reward_config(
+            client,
+            project=cfg.project,
+            location=cfg.location,
+            sample_answer="Answer: 4",
+            example_record=train_records[0],
+        )
     )
     print(f"Reward preflight: {preflight}")
 
@@ -111,7 +113,7 @@ def main() -> None:
     rlft_val = upload_file(rlft_paths["val"], f"{cfg.bucket}/cont_rlft/val.jsonl")
     rlft_name = f"geap-cont-rlft-{VERSION}"
 
-    rlft_job = find_tuning_job_by_display_name(client, rlft_name)
+    rlft_job = find_tuning_job_by_display_name(client, rlft_name, train_uri=rlft_train)
     if rlft_job is None:
         rlft_job = launch_rlft_job(
             client,

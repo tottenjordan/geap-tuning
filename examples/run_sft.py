@@ -54,7 +54,7 @@ def main() -> None:
     print(f"Uploaded train={train_uri} val={val_uri}")
 
     # 3. Reuse an existing job if one exists; otherwise launch.
-    job = find_tuning_job_by_display_name(client, DISPLAY_NAME)
+    job = find_tuning_job_by_display_name(client, DISPLAY_NAME, train_uri=train_uri)
     if job is None:
         job = launch_sft_job(
             client,
