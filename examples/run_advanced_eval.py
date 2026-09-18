@@ -48,10 +48,11 @@ from geap_tuning.autoeval import (
     predefined_metric,
 )
 from geap_tuning.config import genai_client, load_config
-from geap_tuning.gcs import upload_file
+from geap_tuning.gcs import object_fingerprint, upload_file
 from geap_tuning.jobs import (
     find_tuning_job_by_display_name,
     wait_for_tuning_job,
+    with_data_fingerprint,
 )
 from geap_tuning.sft.data import build_sft_dataset
 from geap_tuning.sft.tune import launch_sft_job
@@ -102,6 +103,7 @@ def main() -> None:
     train_uri = upload_file(paths["train"], f"{cfg.bucket}/{GCS_PREFIX}/train.jsonl")
     val_uri = upload_file(paths["val"], f"{cfg.bucket}/{GCS_PREFIX}/val.jsonl")
     print(f"Uploaded train={train_uri} val={val_uri}")
+    data_fp = object_fingerprint(train_uri)
 
     # 2. Assemble the comprehensive eval config.
     eval_config = build_advanced_eval_config(cfg.bucket)
@@ -109,7 +111,9 @@ def main() -> None:
 
     # 3. Reuse an existing job if one exists; otherwise launch with eval attached.
     #    export_last_checkpoint_only=False (default) so eval runs per checkpoint.
-    job = find_tuning_job_by_display_name(client, DISPLAY_NAME, train_uri=train_uri)
+    job = find_tuning_job_by_display_name(
+        client, DISPLAY_NAME, train_uri=train_uri, data_fingerprint=data_fp
+    )
     if job is None:
         job = launch_sft_job(
             client,
@@ -117,7 +121,7 @@ def main() -> None:
             val_uri=val_uri,
             display_name=DISPLAY_NAME,
             evaluation_config=eval_config,
-            labels=cfg.labels,
+            labels=with_data_fingerprint(cfg.labels, data_fp),
         )
         print(f"Launched tuning job with managed eval: {job.name}")
     else:

@@ -27,12 +27,14 @@ from numbers import Real
 from typing import TYPE_CHECKING, Any
 
 from geap_tuning.experiments import log_summary_metrics, track_run
+from geap_tuning.gcs import object_fingerprint
 from geap_tuning.jobs import (
     checkpoint_endpoint,
     find_tuning_job_by_display_name,
     list_checkpoints,
     tuned_endpoint,
     wait_for_tuning_job,
+    with_data_fingerprint,
 )
 from geap_tuning.preference.tune import launch_preference_job
 from geap_tuning.rlft.tune import launch_rlft_job
@@ -268,10 +270,29 @@ def _scalar_params(params: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in params.items() if isinstance(value, str | int | float)}
 
 
+def _dataset_fingerprint(
+    train_uri: str,
+    fingerprint_fn: Callable[[str], str | None],
+) -> str | None:
+    """Fingerprint the staged training data, tolerating a lookup failure.
+
+    Best-effort on purpose: the fingerprint is a *correctness improvement* to job
+    reuse, not a precondition for running a sweep. If Cloud Storage cannot be
+    reached or the object is missing, the sweep proceeds with URI-only matching
+    (the previous behaviour) rather than failing before a single job is launched.
+    """
+    try:
+        return fingerprint_fn(train_uri)
+    except Exception as exc:  # noqa: BLE001 - never block a sweep on a metadata read
+        print(f"note: could not fingerprint {train_uri} ({exc}); reuse falls back to URI only")
+        return None
+
+
 def _run_labels(
     sweep: SweepConfig,
     experiment: str | None,
     labels: Mapping[str, str] | None,
+    data_fingerprint: str | None = None,
 ) -> dict[str, str]:
     """Merge DOE-managed labels onto the caller's resource labels.
 
@@ -285,7 +306,7 @@ def _run_labels(
     merged["tuning_method"] = sweep.method.lower()
     if experiment is not None:
         merged["experiment"] = experiment
-    return merged
+    return with_data_fingerprint(merged, data_fingerprint) or merged
 
 
 def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver testable
@@ -298,6 +319,7 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     launch_fn: Callable[[Any, RunSpec, str, str | None, dict[str, str] | None], Any] | None = None,
     wait_fn: Callable[[Any, str], Any] = wait_for_tuning_job,
     find_fn: Callable[..., Any | None] = find_tuning_job_by_display_name,
+    fingerprint_fn: Callable[[str], str | None] = object_fingerprint,
     experiment: str | None = None,
     labels: dict[str, str] | None = None,
 ) -> list[RunResult]:
@@ -326,7 +348,8 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     :func:`aggregate_results` / :func:`select_best_run`.
     """
     launch = launch_fn or _LAUNCHERS[sweep.method]
-    run_labels = _run_labels(sweep, experiment, labels)
+    fingerprint = _dataset_fingerprint(train_uri, fingerprint_fn)
+    run_labels = _run_labels(sweep, experiment, labels, fingerprint)
     specs = build_run_specs(sweep)
     results: list[RunResult] = []
     failures: list[tuple[str, Exception]] = []
@@ -334,7 +357,12 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     for index, spec in enumerate(specs, start=1):
         print(f"[{index}/{len(specs)}] {spec.display_name}: starting")
         try:
-            existing = find_fn(client, spec.display_name, train_uri=train_uri)
+            existing = find_fn(
+                client,
+                spec.display_name,
+                train_uri=train_uri,
+                data_fingerprint=fingerprint,
+            )
             reused = existing is not None
             if reused:
                 print(f"[{index}/{len(specs)}] {spec.display_name}: reusing job {existing.name}")

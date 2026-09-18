@@ -202,6 +202,7 @@ def test_run_sweep_reuses_existing_job() -> None:
         launch_fn=launch,
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: make_job(),
+        fingerprint_fn=lambda _uri: "fp-test",
     )
     launch.assert_not_called()
     assert results[0].reused is True
@@ -231,6 +232,7 @@ def test_run_sweep_launches_when_absent_and_passes_params() -> None:
         launch_fn=fake_launch,
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=lambda _uri: "fp-test",
     )
     assert seen["params"] == {"epochs": 2, "adapter_size": 8}
     assert results[0].reused is False
@@ -259,11 +261,16 @@ def test_run_sweep_forwards_labels_to_launcher() -> None:
         launch_fn=fake_launch,
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=lambda _uri: "fp-test",
         labels={"project": "geap-tuning"},
     )
     # Caller labels are forwarded, plus the DOE-managed ``tuning_method`` (SFT
     # here, lowercased). No ``experiment`` key since none was passed.
-    assert seen["labels"] == {"project": "geap-tuning", "tuning_method": "sft"}
+    assert seen["labels"] == {
+        "project": "geap-tuning",
+        "tuning_method": "sft",
+        "data_fingerprint": "fp-test",
+    }
 
 
 @pytest.mark.usefixtures("no_tracking")
@@ -289,6 +296,7 @@ def test_run_sweep_adds_method_and_experiment_labels() -> None:
         launch_fn=fake_launch,
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=lambda _uri: "fp-test",
         experiment="geap-doe-rlft-rewards",
         labels={"project": "geap-tuning"},
     )
@@ -296,6 +304,7 @@ def test_run_sweep_adds_method_and_experiment_labels() -> None:
         "project": "geap-tuning",
         "tuning_method": "rlft",  # method lowercased for Vertex label rules
         "experiment": "geap-doe-rlft-rewards",
+        "data_fingerprint": "fp-test",
     }
 
 
@@ -309,11 +318,13 @@ def test_run_sweep_default_launcher_threads_labels_to_tune() -> None:
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=lambda _uri: "fp-test",
         labels={"project": "geap-tuning"},
     )
     assert client.tunings.tune.call_args.kwargs["config"].labels == {
         "project": "geap-tuning",
         "tuning_method": "sft",
+        "data_fingerprint": "fp-test",
     }
 
 
@@ -330,6 +341,7 @@ def test_run_sweep_default_launcher_calls_tune_with_params() -> None:
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=lambda _uri: "fp-test",
     )
     cfg = client.tunings.tune.call_args.kwargs["config"]
     assert cfg.epoch_count == 2
@@ -345,6 +357,7 @@ def test_run_sweep_logs_to_experiments_when_named(no_tracking: dict[str, MagicMo
         evaluate_fn=lambda _ep: {"accuracy": 0.9, "macro_f1": 0.8, "report": {}},
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: make_job(),
+        fingerprint_fn=lambda _uri: "fp-test",
         experiment="exp",
     )
     no_tracking["track"].assert_called_once()
@@ -361,6 +374,7 @@ def test_run_sweep_skips_experiments_when_none(no_tracking: dict[str, MagicMock]
         evaluate_fn=lambda _ep: {"accuracy": 0.9},
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: make_job(),
+        fingerprint_fn=lambda _uri: "fp-test",
     )
     no_tracking["track"].assert_not_called()
     no_tracking["log"].assert_not_called()
@@ -383,6 +397,7 @@ def test_run_sweep_dispatches_dpo() -> None:
         evaluate_fn=lambda _ep: {"win_rate": 0.5},
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=lambda _uri: "fp-test",
     )
     cfg = client.tunings.tune.call_args.kwargs["config"]
     assert cfg.method == "PREFERENCE_TUNING"
@@ -404,6 +419,7 @@ def test_run_sweep_dispatches_rlft() -> None:
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=lambda _uri: "fp-test",
     )
     cfg = client.tunings.tune.call_args.kwargs["config"]
     assert cfg.method == "REINFORCEMENT_TUNING"
@@ -422,6 +438,7 @@ def test_run_sweep_unknown_method_raises() -> None:
             evaluate_fn=lambda _ep: {"accuracy": 0.5},
             wait_fn=lambda _c, _n: make_job(),
             find_fn=lambda _c, _dn, **_k: None,
+            fingerprint_fn=lambda _uri: "fp-test",
         )
 
 
@@ -457,6 +474,7 @@ def test_run_sweep_logs_only_scalar_params(no_tracking: dict[str, MagicMock]) ->
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=lambda _uri: "fp-test",
         experiment="exp",
     )
     params = no_tracking["track"].call_args.kwargs["params"]
@@ -503,6 +521,7 @@ def test_run_sweep_isolates_a_failing_run(capsys: pytest.CaptureFixture[str]) ->
         launch_fn=MagicMock(return_value=make_job()),
         wait_fn=lambda _c, _n: make_job(endpoint=f"ep/{next(states)}"),
         find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=lambda _uri: "fp-test",
     )
 
     assert len(results) == 2  # the two healthy points survive
@@ -528,6 +547,7 @@ def test_run_sweep_raises_when_every_run_fails() -> None:
             launch_fn=MagicMock(return_value=make_job()),
             wait_fn=lambda _c, _n: make_job(),
             find_fn=lambda _c, _dn, **_k: None,
+            fingerprint_fn=lambda _uri: "fp-test",
         )
 
 
@@ -543,6 +563,7 @@ def test_run_sweep_prints_progress(capsys: pytest.CaptureFixture[str]) -> None:
         launch_fn=MagicMock(return_value=make_job()),
         wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=lambda _uri: "fp-test",
     )
     out = capsys.readouterr().out
     assert "[1/2]" in out
@@ -567,5 +588,57 @@ def test_run_sweep_passes_train_uri_to_the_reuse_lookup() -> None:
         launch_fn=MagicMock(return_value=make_job()),
         wait_fn=lambda _c, _n: make_job(),
         find_fn=find,
+        fingerprint_fn=lambda _uri: "fp-test",
     )
     assert seen["train_uri"] == "gs://b/train.jsonl"
+
+
+# --- dataset fingerprinting (W-6) ------------------------------------------------
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_gates_reuse_on_the_dataset_fingerprint() -> None:
+    client = MagicMock()
+    seen: dict[str, object] = {}
+
+    def find(_client: object, _display_name: str, **kwargs: object) -> None:
+        seen.update(kwargs)
+
+    run_sweep(
+        client,
+        SweepConfig(name="s", grid={"epochs": [1]}),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=lambda _ep: {"accuracy": 0.5},
+        launch_fn=MagicMock(return_value=make_job()),
+        wait_fn=lambda _c, _n: make_job(),
+        find_fn=find,
+        fingerprint_fn=lambda _uri: "deadbeef",
+    )
+    assert seen["data_fingerprint"] == "deadbeef"
+    assert seen["train_uri"] == "gs://b/train.jsonl"
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_survives_an_unreachable_fingerprint(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Fingerprinting is a correctness improvement, not a precondition: a metadata
+    # read failure must not stop a sweep before a single job is launched.
+    client = MagicMock()
+
+    def boom(_uri: str) -> str:
+        msg = "403 forbidden"
+        raise RuntimeError(msg)
+
+    results = run_sweep(
+        client,
+        SweepConfig(name="s", grid={"epochs": [1]}),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=lambda _ep: {"accuracy": 0.5},
+        launch_fn=MagicMock(return_value=make_job()),
+        wait_fn=lambda _c, _n: make_job(),
+        find_fn=lambda _c, _dn, **_k: None,
+        fingerprint_fn=boom,
+    )
+    assert len(results) == 1
+    assert "could not fingerprint" in capsys.readouterr().out

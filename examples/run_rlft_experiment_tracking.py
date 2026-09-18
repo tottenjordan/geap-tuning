@@ -45,13 +45,14 @@ from geap_tuning.experiments import (
     log_timeseries_metrics,
     track_run,
 )
-from geap_tuning.gcs import upload_file
+from geap_tuning.gcs import object_fingerprint, upload_file
 from geap_tuning.inference import generate
 from geap_tuning.jobs import (
     checkpoint_endpoint,
     find_tuning_job_by_display_name,
     list_checkpoints,
     wait_for_tuning_job,
+    with_data_fingerprint,
 )
 from geap_tuning.rlft.data import (
     MATH_PROBLEMS,
@@ -78,7 +79,7 @@ ADAPTER_SIZE = 16
 SAMPLES_PER_PROMPT = 4
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915 - a linear end-to-end demo reads better unsplit
     """Run the full RLFT experiment-tracking workflow against live GEAP."""
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
@@ -94,6 +95,7 @@ def main() -> None:
     train_uri = upload_file(paths["train"], f"{cfg.bucket}/{GCS_PREFIX}/train.jsonl")
     val_uri = upload_file(paths["val"], f"{cfg.bucket}/{GCS_PREFIX}/val.jsonl")
     print(f"Uploaded train={train_uri} val={val_uri}")
+    data_fp = object_fingerprint(train_uri)
 
     # 2. Preflight the declarative string-match reward before spending money.
     reward = build_string_match_reward_config()
@@ -111,7 +113,9 @@ def main() -> None:
     print(f"Reward preflight: {preflight}")
 
     # 3. Reuse or launch a single RLFT job that exports intermediate checkpoints.
-    job = find_tuning_job_by_display_name(client, DISPLAY_NAME, train_uri=train_uri)
+    job = find_tuning_job_by_display_name(
+        client, DISPLAY_NAME, train_uri=train_uri, data_fingerprint=data_fp
+    )
     if job is None:
         job = launch_rlft_job(
             client,
@@ -124,7 +128,7 @@ def main() -> None:
             samples_per_prompt=SAMPLES_PER_PROMPT,
             reward_config=reward,
             export_last_checkpoint_only=False,  # keep every checkpoint for the curve
-            labels=cfg.labels,
+            labels=with_data_fingerprint(cfg.labels, data_fp),
         )
         print(f"Launched tuning job: {job.name}")
     else:

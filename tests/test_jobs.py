@@ -316,3 +316,44 @@ def test_job_training_uri_reads_each_method_spec() -> None:
     assert job_training_uri(dpo) == "gs://b/dpo"
     assert job_training_uri(rlft) == "gs://b/rlft"
     assert job_training_uri(job()) is None
+
+
+def _labelled(fingerprint: str | None, *, name: str = "j") -> SimpleNamespace:
+    job = _listed("d", created=1, name=name)
+    job.labels = {"data_fingerprint": fingerprint} if fingerprint else {}
+    return job
+
+
+def test_find_skips_a_job_trained_on_different_bytes_at_the_same_uri() -> None:
+    # The residual W-6 case: same staging path, edited dataset.
+    client = MagicMock()
+    client.tunings.list.return_value = [_labelled("aaaa1111")]
+    assert find_tuning_job_by_display_name(client, "d", data_fingerprint="bbbb2222") is None
+
+
+def test_find_reuses_a_job_trained_on_the_same_bytes() -> None:
+    client = MagicMock()
+    client.tunings.list.return_value = [_labelled("aaaa1111", name="same")]
+    found = find_tuning_job_by_display_name(client, "d", data_fingerprint="aaaa1111")
+    assert found.name == "same"
+
+
+def test_find_reuses_an_unfingerprinted_job_but_says_so(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Jobs launched before fingerprints were recorded cannot be compared; reuse is
+    # allowed, but the ambiguity must be visible rather than silent.
+    client = MagicMock()
+    client.tunings.list.return_value = [_labelled(None, name="legacy")]
+    found = find_tuning_job_by_display_name(client, "d", data_fingerprint="aaaa1111")
+    assert found.name == "legacy"
+    assert "no dataset fingerprint" in capsys.readouterr().out
+
+
+def test_find_ignores_fingerprints_when_none_requested(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = MagicMock()
+    client.tunings.list.return_value = [_labelled("aaaa1111", name="any")]
+    assert find_tuning_job_by_display_name(client, "d").name == "any"
+    assert capsys.readouterr().out == ""  # no note when the check is not requested
