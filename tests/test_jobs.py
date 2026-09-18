@@ -357,3 +357,24 @@ def test_find_ignores_fingerprints_when_none_requested(
     client.tunings.list.return_value = [_labelled("aaaa1111", name="any")]
     assert find_tuning_job_by_display_name(client, "d").name == "any"
     assert capsys.readouterr().out == ""  # no note when the check is not requested
+
+
+def test_heartbeat_flushes_so_it_survives_redirection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """stdout is block-buffered when redirected to a file/CI log.
+
+    Without flush the heartbeat only appears once the process exits, which defeats
+    its whole purpose of reporting progress *during* a 30-60 minute wait. Observed
+    on a live run piped to a log.
+    """
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr("builtins.print", lambda *_a, **kwargs: calls.append(kwargs))
+    client = MagicMock()
+    client.tunings.get.return_value = SimpleNamespace(state="JOB_STATE_SUCCEEDED", name="n")
+    monkeypatch.setattr("geap_tuning.jobs.time.sleep", lambda _: None)
+
+    wait_for_tuning_job(client, "projects/p/locations/l/tuningJobs/1", poll_interval=0)
+
+    assert calls, "heartbeat printed nothing"
+    assert all(call.get("flush") is True for call in calls)

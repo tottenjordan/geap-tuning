@@ -111,3 +111,22 @@ def test_launch_sft_job_rejects_evaluate_interval() -> None:
             display_name="d",
             evaluate_interval=50,  # ty: ignore[unknown-argument]
         )
+
+
+def test_launch_sft_job_uses_the_validation_dataset_type() -> None:
+    """The SDK expects TuningValidationDataset here, not TuningDataset.
+
+    They share gcs_uri so pydantic coerces and the job still launches, but it logs
+    a type-mismatch warning on every real run. Caught by a live run; the mocked
+    client cannot see it, hence this explicit type assertion.
+    """
+    client = MagicMock()
+    launch_sft_job(
+        client,
+        train_uri="gs://b/train.jsonl",
+        val_uri="gs://b/val.jsonl",
+        display_name="d",
+    )
+    cfg = client.tunings.tune.call_args.kwargs["config"]
+    assert isinstance(cfg.validation_dataset, types.TuningValidationDataset)
+    assert cfg.validation_dataset.gcs_uri == "gs://b/val.jsonl"

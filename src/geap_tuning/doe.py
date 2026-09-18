@@ -355,7 +355,7 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     failures: list[tuple[str, Exception]] = []
 
     for index, spec in enumerate(specs, start=1):
-        print(f"[{index}/{len(specs)}] {spec.display_name}: starting")
+        print(f"[{index}/{len(specs)}] {spec.display_name}: starting", flush=True)
         try:
             existing = find_fn(
                 client,
@@ -365,7 +365,10 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
             )
             reused = existing is not None
             if reused:
-                print(f"[{index}/{len(specs)}] {spec.display_name}: reusing job {existing.name}")
+                print(
+                    f"[{index}/{len(specs)}] {spec.display_name}: reusing job {existing.name}",
+                    flush=True,
+                )
             job = existing if reused else launch(client, spec, train_uri, val_uri, run_labels)
             job = wait_fn(client, job.name)
             endpoint = tuned_endpoint(job)
@@ -377,11 +380,17 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
         except Exception as exc:  # noqa: BLE001 - one bad grid point must not void the rest
             # A sweep costs hours and money; losing three finished runs because the
             # fourth hit a transient error is the expensive failure mode.
-            print(f"[{index}/{len(specs)}] {spec.display_name}: FAILED ({exc}); skipping")
+            print(
+                f"[{index}/{len(specs)}] {spec.display_name}: FAILED ({exc}); skipping",
+                flush=True,
+            )
             failures.append((spec.display_name, exc))
             continue
 
-        print(f"[{index}/{len(specs)}] {spec.display_name}: done ({_numeric_metrics(metrics)})")
+        print(
+            f"[{index}/{len(specs)}] {spec.display_name}: done ({_numeric_metrics(metrics)})",
+            flush=True,
+        )
         results.append(
             RunResult(
                 spec=spec,
