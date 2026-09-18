@@ -68,7 +68,7 @@ def launch_preference_job(  # noqa: PLR0913 - explicit tuning hyperparameters, a
         adapter_size=ADAPTER_MAP[adapter_size],
         learning_rate_multiplier=learning_rate_multiplier,
         beta=beta,
-        validation_dataset=types.TuningDataset(gcs_uri=val_uri) if val_uri else None,
+        validation_dataset=types.TuningValidationDataset(gcs_uri=val_uri) if val_uri else None,
         export_last_checkpoint_only=export_last_checkpoint_only,
         evaluation_config=evaluation_config,
         pre_tuned_model_checkpoint_id=pre_tuned_model_checkpoint_id,

@@ -242,7 +242,7 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
         samples_per_prompt=samples_per_prompt,
         reward_config=single_reward,
         composite_reward_config=composite_reward_config,
-        validation_dataset=types.TuningDataset(gcs_uri=val_uri) if val_uri else None,
+        validation_dataset=types.TuningValidationDataset(gcs_uri=val_uri) if val_uri else None,
         export_last_checkpoint_only=export_last_checkpoint_only,
         evaluation_config=evaluation_config,
         evaluate_interval=evaluate_interval,

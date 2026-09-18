@@ -53,7 +53,13 @@ def _print_heartbeat(job_name: str, state: str, elapsed: float) -> None:
     """Print one timestamped ``state``/``elapsed`` line for a long-running job."""
     stamp = time.strftime("%H:%M:%S")
     short = job_name.rsplit("/", 1)[-1]
-    print(f"[{stamp}] tuning job {short}: {state} ({elapsed / 60:.1f} min elapsed)")
+    # flush: stdout is block-buffered when redirected (a log file, nohup, CI), so
+    # without this a heartbeat meant to show progress during a 30-60 minute wait
+    # stays invisible until the process exits - defeating the entire point.
+    print(
+        f"[{stamp}] tuning job {short}: {state} ({elapsed / 60:.1f} min elapsed)",
+        flush=True,
+    )
 
 
 def tuned_endpoint(job: Any) -> str:  # noqa: ANN401 - SDK job type is dynamic
