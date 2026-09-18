@@ -128,7 +128,9 @@ without an SFT warm-start.** The graded reward *did* deliver the promised
 variance (keywords moved, and the base's graded `accuracy` was 0.82 not 0.00), so
 the reward design is sound — the null is a genuine property of reinforcement
 tuning, and the pilot gate correctly identified real (but, as it turns out,
-un-RL-reachable) headroom.
+un-RL-reachable) headroom. The before→after table and the per-component chart are
+written up as a DOE:
+[`../doe/rlft-constrained-generation/README.md`](../doe/rlft-constrained-generation/README.md).
 
 ### SFT extraction — SFT learns *rule-based* conventions, resists an *arbitrary relabel* (ran live)
 
@@ -182,4 +184,6 @@ weakly: the per-draft "strictly shorter" rate is a coin flip at this sample size
 the subjective judge, which a strong base already saturates, does not reward the
 extra concision. An honest before→after: the trained objective improves directionally,
 while the subjective axis a strong base dominates does not — the same theme as the
-SFT and RLFT results, that modern bases leave thin, uneven headroom.
+SFT and RLFT results, that modern bases leave thin, uneven headroom. The metric pivot
+and the before→after chart are written up as a DOE:
+[`../doe/dpo-concise-email/README.md`](../doe/dpo-concise-email/README.md).
