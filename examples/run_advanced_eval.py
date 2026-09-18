@@ -7,7 +7,7 @@ is an integration entrypoint, not covered by the test suite. Run with a real
     uv run python examples/run_advanced_eval.py
 
 GEAP's managed **Evaluation** service runs *inside* a tuning job: attach an
-``EvaluationConfig`` (there is no standalone eval client in google-genai 2.14.0)
+``EvaluationConfig`` (there is no standalone eval client in google-genai 2.24.0)
 and GEAP evaluates each checkpoint and writes results to Cloud Storage. This
 example reuses the SFT support-intent dataset (see ``run_sft.py``) and attaches a
 **comprehensive** config that exercises every metric kind plus the judge and
@@ -25,7 +25,7 @@ inference knobs:
 
 GEAP evaluates each exported checkpoint, so eval cadence follows checkpointing
 (keep ``export_last_checkpoint_only=False``). NOTE: there is **no**
-``evaluate_interval`` here — in google-genai 2.14.0 that field serializes only
+``evaluate_interval`` here — in google-genai 2.24.0 that field serializes only
 under the reinforcement spec, so passing it on an SFT job 400s; it is RLFT-only
 (see ``run_rlft_reward_types.py``).
 

@@ -236,7 +236,7 @@ its own **offline** scoring. They answer different questions — use both:
 ### Using the managed Evaluation service
 
 The service is reached **through the tuning call** — there is no standalone
-`client.evals` surface in the Gen AI SDK (2.14.0). You attach an
+`client.evals` surface in the Gen AI SDK (2.24.0). You attach an
 `EvaluationConfig` to the job; GEAP then evaluates each exported checkpoint and
 writes the results to GCS. Build the config with
 [`geap_tuning.autoeval.build_evaluation_config`](src/geap_tuning/autoeval.py) and
@@ -299,7 +299,7 @@ types.EvaluationConfig(
   checkpoints).
 - **Cadence** — SFT/DPO evaluate per exported checkpoint (cadence follows
   checkpointing). `evaluate_interval` (int) for explicit step-based cadence is
-  **RLFT-only** in google-genai 2.14.0 — the SDK serializes it under the
+  **RLFT-only** in google-genai 2.24.0 — the SDK serializes it under the
   reinforcement spec, so it 400s on SFT/DPO jobs; it is threaded through
   `launch_rlft_job` only. See [docs/notes/tuning-apis.md](docs/notes/tuning-apis.md).
 - **Results** — land under `output_uri_prefix` in Cloud Storage; view them there

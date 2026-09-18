@@ -54,7 +54,7 @@ def launch_preference_job(  # noqa: PLR0913 - explicit tuning hyperparameters, a
     documented DPO best practice is to SFT first, then continuous-tune from that
     SFT model by passing its resource name as ``base_model`` (see
     ``docs/notes/checkpoints-and-continuous-tuning.md``). Like SFT, DPO has **no**
-    ``evaluate_interval`` — that field is RLFT-only in google-genai 2.14.0 (it
+    ``evaluate_interval`` — that field is RLFT-only in google-genai 2.24.0 (it
     serializes under the reinforcement spec, so passing it here 400s).
 
     ``labels`` behaves as in :func:`launch_sft_job`: resource labels on the job
