@@ -22,13 +22,30 @@ module is **Layer 2**: opt-in, cross-run comparison plus your own metrics.
 from __future__ import annotations
 
 import contextlib
+import importlib
 from typing import TYPE_CHECKING, Any
 
 from google.api_core import exceptions as api_exceptions
-from google.cloud import aiplatform
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+
+def _import_aiplatform() -> Any:  # noqa: ANN401 - returns the aiplatform module
+    """Return ``google.cloud.aiplatform``, imported on first use.
+
+    Deferred purely for **import cost**: the module takes ~4.3s to import (it
+    roughly doubled in the 1.x -> 2.x bump) and is only needed when an
+    Experiments helper actually runs, so importing it eagerly taxed every
+    consumer of this module — including ``doe.py`` and the whole test suite.
+
+    Mirrors ``viz._import_matplotlib`` / ``sft_vision.data._import_kagglehub``,
+    with one difference worth knowing: those guard *optional* dependency groups
+    and raise an actionable install hint. aiplatform is a **required** runtime
+    dep, so there is no hint to give and no error path to add — ``import_module``
+    caches in ``sys.modules``, so repeat calls are free.
+    """
+    return importlib.import_module("google.cloud.aiplatform")
 
 
 def init_experiment(
@@ -47,6 +64,7 @@ def init_experiment(
     still records params and summary metrics. Keep ``location`` aligned with the
     tuning region — Experiments is a regional resource.
     """
+    aiplatform = _import_aiplatform()
     aiplatform.init(
         project=project,
         location=location,
@@ -72,6 +90,7 @@ def get_or_create_tensorboard(
     ``start_run`` accept no label param, so TensorBoard is the only Experiments
     resource that can be labeled here. See ``docs/notes/resource-labels.md``.
     """
+    aiplatform = _import_aiplatform()
     for tb in aiplatform.Tensorboard.list(project=project, location=location):
         if tb.display_name == display_name:
             return tb.resource_name
@@ -100,6 +119,7 @@ def track_run(
     than re-created, so re-running a sweep never 409s on Experiments logging —
     matching the job-level reuse it is paired with.
     """
+    aiplatform = _import_aiplatform()
     try:
         run_cm = aiplatform.start_run(run_name)
     except api_exceptions.AlreadyExists:
@@ -115,7 +135,7 @@ def log_summary_metrics(metrics: dict[str, float]) -> None:
 
     No TensorBoard required. Use for offline eval outputs.
     """
-    aiplatform.log_metrics(metrics)
+    _import_aiplatform().log_metrics(metrics)
 
 
 def log_timeseries_metrics(metrics: dict[str, float], *, step: int) -> None:
@@ -124,9 +144,9 @@ def log_timeseries_metrics(metrics: dict[str, float], *, step: int) -> None:
     Stored in Vertex AI / Managed TensorBoard, so the experiment must have a
     TensorBoard attached (see :func:`init_experiment` ``tensorboard=``).
     """
-    aiplatform.log_time_series_metrics(metrics, step=step)
+    _import_aiplatform().log_time_series_metrics(metrics, step=step)
 
 
 def experiment_dataframe(experiment: str) -> Any:  # noqa: ANN401 - pandas is a transitive dep
     """Return a cross-run comparison table (params + summary metrics) for ``experiment``."""
-    return aiplatform.Experiment(experiment).get_data_frame()
+    return _import_aiplatform().Experiment(experiment).get_data_frame()
