@@ -1,13 +1,20 @@
 """Tests for the banking77 intent-classification dataset loader.
 
-All tests use the offline ``csv_dir`` path (fake CSVs written to ``tmp_path``); the
-network download (``download_banking77``) is never exercised here.
+Dataset-shaping tests use the offline ``csv_dir`` path (fake CSVs written to
+``tmp_path``). The download path is covered too, with ``urlopen`` monkeypatched, so
+no test touches the network.
 """
+
+from __future__ import annotations
 
 import json
 from collections import Counter
 from pathlib import Path
+from typing import Self
 
+import pytest
+
+from geap_tuning.sft import banking
 from geap_tuning.sft.banking import (
     banking_labels,
     build_banking_dataset,
@@ -118,3 +125,57 @@ def test_build_banking_dataset_disjoint_and_written(tmp_path: Path) -> None:
         assert all(r["systemInstruction"]["parts"][0]["text"] == system for r in records)
     # test split drawn from the held-out test CSV.
     assert user_texts(test) <= {text for text, _ in _TEST_ROWS}
+
+
+# --- download caching: a partial fetch must never be cached as valid -------------
+
+
+def test_download_is_atomic_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An interrupted download must leave no CSV behind, not a truncated one."""
+
+    class _Partial:
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            msg = "connection reset mid-download"
+            raise OSError(msg)
+
+    monkeypatch.setattr(banking.urllib.request, "urlopen", lambda *_a, **_k: _Partial())
+
+    with pytest.raises(OSError, match="connection reset"):
+        banking.download_banking77(tmp_path)
+
+    assert not (tmp_path / "train.csv").exists()  # no truncated cache
+    assert not list(tmp_path.glob("*.part"))  # and no leftover temp file
+
+
+def test_download_writes_and_caches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = b"text,category\nhi,card_arrival\n"
+    calls: list[str] = []
+
+    class _Ok:
+        def __init__(self, url: str) -> None:
+            calls.append(url)
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return payload
+
+    monkeypatch.setattr(banking.urllib.request, "urlopen", lambda url, **_k: _Ok(url))
+
+    paths = banking.download_banking77(tmp_path)
+    assert paths["train"].read_bytes() == payload
+    assert not list(tmp_path.glob("*.part"))
+
+    # Second call is served from cache: no further network access.
+    banking.download_banking77(tmp_path)
+    assert len(calls) == 2  # train + test, from the first call only
