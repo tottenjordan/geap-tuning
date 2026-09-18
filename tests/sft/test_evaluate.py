@@ -1,11 +1,13 @@
 """Tests for SFT evaluation (pure scoring + mocked predictor)."""
 
+import pytest
+
 from geap_tuning.sft.evaluate import run_eval, score_classification
 
 
 def test_score_classification() -> None:
     m = score_classification(y_true=["billing", "technical"], y_pred=["billing", "billing"])
-    assert m["accuracy"] == 0.5
+    assert m["accuracy"] == pytest.approx(0.5)
     assert "macro_f1" in m
     assert 0.0 <= m["macro_f1"] <= 1.0
     assert "report" in m
@@ -27,7 +29,7 @@ def test_run_eval_uses_predict_fn() -> None:
         },
     ]
     m = run_eval(records, predict_fn=lambda _user_text: "billing")
-    assert m["accuracy"] == 0.5
+    assert m["accuracy"] == pytest.approx(0.5)
 
 
 def test_run_eval_all_correct() -> None:
@@ -40,4 +42,4 @@ def test_run_eval_all_correct() -> None:
         },
     ]
     m = run_eval(records, predict_fn=lambda _user_text: "billing")
-    assert m["accuracy"] == 1.0
+    assert m["accuracy"] == pytest.approx(1.0)

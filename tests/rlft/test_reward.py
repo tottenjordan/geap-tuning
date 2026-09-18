@@ -1,5 +1,7 @@
 """Tests for the self-contained RLFT math reward (also shipped to the sandbox)."""
 
+import pytest
+
 from geap_tuning.rlft.reward import evaluate, extract_answer
 
 
@@ -22,22 +24,22 @@ def test_extract_answer_missing_returns_none() -> None:
 def test_evaluate_correct_returns_positive() -> None:
     example = {"references": {"ground_truth_answer": "391"}}
     response = {"parts": [{"text": "17 * 23 = 391\nAnswer: 391"}]}
-    assert evaluate(example, response) == 1.0
+    assert evaluate(example, response) == pytest.approx(1.0)
 
 
 def test_evaluate_wrong_returns_negative() -> None:
     example = {"references": {"ground_truth_answer": "391"}}
     response = {"parts": [{"text": "Answer: 40"}]}
-    assert evaluate(example, response) == -1.0
+    assert evaluate(example, response) == pytest.approx(-1.0)
 
 
 def test_evaluate_unparseable_returns_negative() -> None:
     example = {"references": {"ground_truth_answer": "391"}}
     response = {"parts": [{"text": "no answer here"}]}
-    assert evaluate(example, response) == -1.0
+    assert evaluate(example, response) == pytest.approx(-1.0)
 
 
 def test_evaluate_accepts_content_wrapper() -> None:
     example = {"references": {"ground_truth_answer": "4"}}
     response = {"content": {"parts": [{"text": "Answer: 4"}]}}
-    assert evaluate(example, response) == 1.0
+    assert evaluate(example, response) == pytest.approx(1.0)

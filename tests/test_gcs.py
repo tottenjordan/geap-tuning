@@ -1,9 +1,12 @@
 """Tests for Cloud Storage helpers."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from geap_tuning.gcs import build_gcs_uri, upload_file
+import pytest
+
+from geap_tuning import gcs
+from geap_tuning.gcs import build_gcs_uri, upload_file, upload_jsonl
 
 
 def test_build_gcs_uri_joins_and_strips() -> None:
@@ -25,3 +28,46 @@ def test_upload_file_parses_bucket_and_blob(mock_client: object, tmp_path: Path)
     client.bucket.return_value.blob.return_value.upload_from_filename.assert_called_once_with(
         str(local)
     )
+
+
+def test_upload_file_accepts_an_injected_client(tmp_path: Path) -> None:
+    src = tmp_path / "d.jsonl"
+    src.write_text("{}\n", encoding="utf-8")
+    client = MagicMock()
+
+    uri = upload_file(src, "gs://b/p/d.jsonl", client=client)
+
+    assert uri == "gs://b/p/d.jsonl"
+    client.bucket.assert_called_once_with("b")
+    client.bucket.return_value.blob.assert_called_once_with("p/d.jsonl")
+
+
+def test_upload_file_reuses_one_default_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # One authenticated client per uploaded file meant ~350 of them in the vision
+    # example; the default client must be built once and shared.
+    src = tmp_path / "d.jsonl"
+    src.write_text("{}\n", encoding="utf-8")
+    built = []
+
+    def fake_client() -> MagicMock:
+        built.append(1)
+        return MagicMock()
+
+    gcs._default_client.cache_clear()  # noqa: SLF001 - clearing the cache under test
+    monkeypatch.setattr(gcs.storage, "Client", fake_client)
+    try:
+        for i in range(3):
+            upload_file(src, f"gs://b/p/{i}.jsonl")
+        assert len(built) == 1
+    finally:
+        gcs._default_client.cache_clear()  # noqa: SLF001 - leave no cached mock
+
+
+def test_upload_jsonl_threads_the_client(tmp_path: Path) -> None:
+    src = tmp_path / "d.jsonl"
+    src.write_text("{}\n", encoding="utf-8")
+    client = MagicMock()
+    assert upload_jsonl(src, "gs://b", "p", "d.jsonl", client=client) == "gs://b/p/d.jsonl"
+    client.bucket.assert_called_once_with("b")

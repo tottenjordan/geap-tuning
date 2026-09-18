@@ -8,6 +8,7 @@ Storage client.
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING
 
 from google.cloud import storage
@@ -37,15 +38,37 @@ def _split_uri(gcs_uri: str) -> tuple[str, str]:
     return bucket, blob
 
 
-def upload_file(local_path: str | Path, gcs_uri: str) -> str:
+@functools.cache
+def _default_client() -> storage.Client:
+    """Return a process-wide Cloud Storage client, built on first use.
+
+    Cached because a fresh ``storage.Client()`` per call meant one authenticated
+    client and connection pool **per uploaded file** — the vision example stages
+    ~350 images, so that was ~350 clients left to garbage collection. Callers that
+    need their own credentials or project can pass ``client=`` instead.
+    """
+    return storage.Client()
+
+
+def upload_file(
+    local_path: str | Path,
+    gcs_uri: str,
+    *,
+    client: storage.Client | None = None,
+) -> str:
     """Upload a local file to ``gcs_uri`` and return that URI."""
     bucket_name, blob_name = _split_uri(gcs_uri)
-    client = storage.Client()
-    client.bucket(bucket_name).blob(blob_name).upload_from_filename(str(local_path))
+    storage_client = client or _default_client()
+    storage_client.bucket(bucket_name).blob(blob_name).upload_from_filename(str(local_path))
     return gcs_uri
 
 
-def upload_jsonl(local_path: str | Path, bucket: str, *parts: str) -> str:
+def upload_jsonl(
+    local_path: str | Path,
+    bucket: str,
+    *parts: str,
+    client: storage.Client | None = None,
+) -> str:
     """Upload a JSONL file under ``bucket``/``parts`` and return the resulting URI."""
     gcs_uri = build_gcs_uri(bucket, *parts)
-    return upload_file(local_path, gcs_uri)
+    return upload_file(local_path, gcs_uri, client=client)

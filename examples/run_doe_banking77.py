@@ -155,10 +155,13 @@ def main() -> None:
 
     # 8. Chart baseline + runs (needs the viz group).
     try:
-        from geap_tuning.viz import plot_grouped_metric_bars  # noqa: PLC0415 - opt-in dep
+        from geap_tuning.viz import (  # noqa: PLC0415 - opt-in dep
+            plot_grouped_metric_bars,
+            save_figure,
+        )
 
         fig = plot_grouped_metric_bars(rows, metrics=metrics)
-        fig.savefig(PLOT_PATH, bbox_inches="tight")
+        save_figure(fig, PLOT_PATH)
         print(f"\nSaved chart to {PLOT_PATH}")
     except RuntimeError as exc:  # viz group not installed
         print(f"\nSkipped chart ({exc}). Install with: uv sync --group viz")

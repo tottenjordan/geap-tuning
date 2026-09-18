@@ -28,7 +28,7 @@ def test_generate_forwards_extra_config() -> None:
     generate(client, "ep", "Q", temperature=0.2, max_output_tokens=64)
 
     config = client.models.generate_content.call_args.kwargs["config"]
-    assert config["temperature"] == 0.2
+    assert config["temperature"] == pytest.approx(0.2)
     assert config["max_output_tokens"] == 64
 
 

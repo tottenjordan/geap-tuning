@@ -1,5 +1,7 @@
 """Tests for the constrained-generation multimetric eval scorer."""
 
+import pytest
+
 from geap_tuning.rlft.constrained import CONSTRAINT_SPECS, build_records
 from geap_tuning.rlft.constraint_eval import run_eval
 
@@ -51,8 +53,8 @@ def test_full_satisfaction_counts_only_perfect() -> None:
         return reply
 
     result = run_eval(records, perfect_fn)
-    assert result["full_satisfaction_rate"] == 1.0
-    assert result["accuracy"] == 1.0
+    assert result["full_satisfaction_rate"] == pytest.approx(1.0)
+    assert result["accuracy"] == pytest.approx(1.0)
 
 
 def test_by_constraint_type_aggregates() -> None:

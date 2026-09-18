@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from geap_tuning.sft.extraction import EXTRACTION_EXAMPLES, build_records
 from geap_tuning.sft.extraction_eval import (
     parse_json_object,
@@ -36,24 +38,24 @@ def test_score_one_wrong_of_five() -> None:
     gold = {"order_id": "A1", "item": "mouse", "quantity": 3, "city": "Austin", "priority": "high"}
     pred = {"order_id": "A1", "item": "mouse", "quantity": 3, "city": "Austin", "priority": "low"}
     result = score_extraction([gold], [pred])
-    assert result["accuracy"] == 0.8
-    assert result["exact_match"] == 0.0
-    assert result["json_validity"] == 1.0
+    assert result["accuracy"] == pytest.approx(0.8)
+    assert result["exact_match"] == pytest.approx(0.0)
+    assert result["json_validity"] == pytest.approx(1.0)
 
 
 def test_score_identical_is_perfect() -> None:
     gold = {"order_id": "A1", "item": "mouse", "quantity": 3, "city": "Austin", "priority": "high"}
     result = score_extraction([gold], [dict(gold)])
-    assert result["accuracy"] == 1.0
-    assert result["exact_match"] == 1.0
+    assert result["accuracy"] == pytest.approx(1.0)
+    assert result["exact_match"] == pytest.approx(1.0)
 
 
 def test_none_pred_drops_validity_and_misses_all() -> None:
     gold = {"order_id": "A1", "item": "mouse", "quantity": 3, "city": "Austin", "priority": "high"}
     result = score_extraction([gold], [None])
-    assert result["json_validity"] == 0.0
-    assert result["accuracy"] == 0.0
-    assert result["exact_match"] == 0.0
+    assert result["json_validity"] == pytest.approx(0.0)
+    assert result["accuracy"] == pytest.approx(0.0)
+    assert result["exact_match"] == pytest.approx(0.0)
 
 
 def test_int_vs_str_quantity_matches() -> None:
@@ -66,16 +68,16 @@ def test_int_vs_str_quantity_matches() -> None:
         "priority": "high",
     }
     result = score_extraction([gold], [pred])
-    assert result["accuracy"] == 1.0
-    assert result["exact_match"] == 1.0
+    assert result["accuracy"] == pytest.approx(1.0)
+    assert result["exact_match"] == pytest.approx(1.0)
 
 
 def test_per_field_breakdown() -> None:
     gold = {"order_id": "A1", "item": "mouse", "quantity": 3, "city": "Austin", "priority": "high"}
     pred = {"order_id": "A1", "item": "mouse", "quantity": 3, "city": "Austin", "priority": "low"}
     result = score_extraction([gold], [pred])
-    assert result["per_field"]["priority"] == 0.0
-    assert result["per_field"]["item"] == 1.0
+    assert result["per_field"]["priority"] == pytest.approx(0.0)
+    assert result["per_field"]["item"] == pytest.approx(1.0)
 
 
 def test_run_eval_with_stub() -> None:

@@ -173,7 +173,7 @@ def test_aggregate_results_flattens_params_and_metrics() -> None:
 def test_aggregate_results_skips_absent_metrics() -> None:
     (row,) = aggregate_results([_result("r", {}, {"accuracy": 0.5})])
     assert "macro_f1" not in row
-    assert row["accuracy"] == 0.5
+    assert row["accuracy"] == pytest.approx(0.5)
 
 
 # --- run_sweep (driver) --------------------------------------------------------

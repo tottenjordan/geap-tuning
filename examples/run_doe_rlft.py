@@ -139,10 +139,10 @@ def main() -> None:
 
     # 7. Optional chart (needs the viz group).
     if plot:
-        from geap_tuning.viz import plot_metric_bars  # noqa: PLC0415 - opt-in dep
+        from geap_tuning.viz import plot_metric_bars, save_figure  # noqa: PLC0415 - opt-in dep
 
         fig = plot_metric_bars(rows, metric=metric)
-        fig.savefig(PLOT_PATH, bbox_inches="tight")
+        save_figure(fig, PLOT_PATH)
         print(f"Saved chart to {PLOT_PATH}")
 
     # 8. The same runs, read back from Experiments.

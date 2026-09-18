@@ -1,5 +1,7 @@
 """Tests for RLFT offline accuracy evaluation (reuses the training reward)."""
 
+import pytest
+
 from geap_tuning.rlft.evaluate import (
     bootstrap_ci,
     content_correct,
@@ -11,11 +13,11 @@ from geap_tuning.rlft.evaluate import (
 
 def test_score_accuracy() -> None:
     metrics = score_accuracy([1.0, -1.0, 1.0, 1.0])
-    assert metrics["accuracy"] == 0.75
+    assert metrics["accuracy"] == pytest.approx(0.75)
     assert metrics["correct"] == 3
     assert metrics["n"] == 4
     empty = score_accuracy([])
-    assert empty["accuracy"] == 0.0
+    assert empty["accuracy"] == pytest.approx(0.0)
     assert empty["correct"] == 0
 
 
@@ -45,11 +47,11 @@ def test_run_rlft_eval_uses_injected_generate_fn() -> None:
     # Generator answers the first correctly, the second wrongly.
     replies = iter(["Answer: 4", "Answer: 99"])
     metrics = run_rlft_eval(records, generate_fn=lambda _user, _sys=None: next(replies))
-    assert metrics["accuracy"] == 0.5
+    assert metrics["accuracy"] == pytest.approx(0.5)
     assert metrics["correct"] == 1
     assert metrics["n"] == 2
     # Both replies use the marker; content accuracy tracks the marker score here.
-    assert metrics["content_accuracy"] == 0.5
+    assert metrics["content_accuracy"] == pytest.approx(0.5)
     assert metrics["content_correct"] == 1
 
 
@@ -68,8 +70,8 @@ def test_run_rlft_eval_content_accuracy_diverges_from_marker() -> None:
     ]
     replies = iter(["The sum is **55**.", "2 to the 8th is 256."])
     metrics = run_rlft_eval(records, generate_fn=lambda _user, _sys=None: next(replies))
-    assert metrics["accuracy"] == 0.0
-    assert metrics["content_accuracy"] == 1.0
+    assert metrics["accuracy"] == pytest.approx(0.0)
+    assert metrics["content_accuracy"] == pytest.approx(1.0)
     assert metrics["content_correct"] == 2
 
 
@@ -112,10 +114,10 @@ def test_run_rlft_eval_format_rate_counts_markers_regardless_of_correctness() ->
     ]
     replies = iter(["Answer: 99", "The total is 6."])
     metrics = run_rlft_eval(records, generate_fn=lambda _u, _s=None: next(replies))
-    assert metrics["format_rate"] == 0.5  # only the (wrong) marker reply counts
+    assert metrics["format_rate"] == pytest.approx(0.5)  # only the (wrong) marker reply counts
     assert metrics["format_count"] == 1
-    assert metrics["accuracy"] == 0.0  # neither is both correct AND marked
-    assert metrics["content_accuracy"] == 0.5  # the prose "6" is content-correct
+    assert metrics["accuracy"] == pytest.approx(0.0)  # neither is both correct AND marked
+    assert metrics["content_accuracy"] == pytest.approx(0.5)  # the prose "6" is content-correct
 
 
 def test_run_rlft_multimetric_eval_reports_all_axes_and_tiers() -> None:
@@ -137,10 +139,10 @@ def test_run_rlft_multimetric_eval_reports_all_axes_and_tiers() -> None:
         judge_fn=lambda _q, _r, _t: 0.75,
     )
     assert metrics["n"] == 2
-    assert metrics["correctness"] == 1.0  # both right (marker-agnostic)
-    assert metrics["format_rate"] == 0.5  # only the first has a marker
-    assert metrics["marker_accuracy"] == 0.5  # correct AND marked
-    assert metrics["explanation_quality"] == 0.75
+    assert metrics["correctness"] == pytest.approx(1.0)  # both right (marker-agnostic)
+    assert metrics["format_rate"] == pytest.approx(0.5)  # only the first has a marker
+    assert metrics["marker_accuracy"] == pytest.approx(0.5)  # correct AND marked
+    assert metrics["explanation_quality"] == pytest.approx(0.75)
     assert metrics["by_difficulty"]["easy"] == {"correctness": 1.0, "n": 1}
     assert metrics["by_difficulty"]["hard"] == {"correctness": 1.0, "n": 1}
 

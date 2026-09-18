@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+    from pathlib import Path
 
 _DEFAULT_METRICS = ("accuracy", "macro_f1")
 _VIZ_HINT = "run: uv sync --group viz"
@@ -180,3 +181,17 @@ def plot_curves(
     ax.set_title(f"{metric} vs {xlabel}")
     ax.legend()
     return fig
+
+
+def save_figure(fig: Any, path: str | Path, **savefig_kwargs: Any) -> None:  # noqa: ANN401 - Figure
+    """Save ``fig`` to ``path`` and close it.
+
+    The plot functions here return a Figure for the caller to save or display
+    inline. Scripts that only save it should close it too: pyplot keeps every
+    figure in a global registry, so a notebook that re-runs plotting cells
+    accumulates them and eventually trips the "More than 20 figures" warning.
+    Defaults to ``bbox_inches="tight"``, matching how every driver saves.
+    """
+    savefig_kwargs.setdefault("bbox_inches", "tight")
+    fig.savefig(path, **savefig_kwargs)
+    _import_matplotlib().close(fig)

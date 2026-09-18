@@ -167,3 +167,17 @@ def test_genai_client_still_routes_location_and_project(captured_client: MagicMo
     assert kwargs["project"] == "proj-x"
     assert kwargs["location"] == "global"  # Gemini 3.x inference
     assert kwargs["vertexai"] is True
+
+
+def test_load_config_rejects_the_global_location() -> None:
+    # `global` serves Gemini 3.x inference but does not support tuning, so a config
+    # resolving to it must fail here rather than at job-launch time.
+    env = {"PROJECT_ID": "p", "BUCKET": "gs://b", "GOOGLE_CLOUD_LOCATION": "global"}
+    with pytest.raises(ValueError, match="does not support tuning"):
+        load_config(env)
+
+
+def test_resolve_location_still_routes_inference_to_global() -> None:
+    # The config-level rejection must not break per-call inference routing.
+    cfg = TuningConfig(project="p", location="us-central1", bucket="gs://b")
+    assert resolve_location(cfg, "gemini-3.5-flash") == "global"
