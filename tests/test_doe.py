@@ -28,6 +28,7 @@ from geap_tuning.doe import (
     select_best_run,
 )
 from geap_tuning.rlft.tune import build_string_match_reward_config
+from tests.conftest import make_checkpoint, make_job
 
 # --- expand_grid ---------------------------------------------------------------
 
@@ -189,12 +190,6 @@ def no_tracking(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     return {"track": track, "log": log}
 
 
-def _job(endpoint: str = "ep/x") -> SimpleNamespace:
-    return SimpleNamespace(
-        name="jobs/x", tuned_model=SimpleNamespace(endpoint=endpoint, model=None)
-    )
-
-
 @pytest.mark.usefixtures("no_tracking")
 def test_run_sweep_reuses_existing_job() -> None:
     client = MagicMock()
@@ -205,8 +200,8 @@ def test_run_sweep_reuses_existing_job() -> None:
         train_uri="gs://b/train.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.9},
         launch_fn=launch,
-        wait_fn=lambda _c, _n: _job(),
-        find_fn=lambda _c, _dn, **_k: _job(),
+        wait_fn=lambda _c, _n: make_job(),
+        find_fn=lambda _c, _dn, **_k: make_job(),
     )
     launch.assert_not_called()
     assert results[0].reused is True
@@ -226,7 +221,7 @@ def test_run_sweep_launches_when_absent_and_passes_params() -> None:
         _labels: dict[str, str] | None = None,
     ) -> SimpleNamespace:
         seen["params"] = spec.params
-        return _job()
+        return make_job()
 
     results = run_sweep(
         client,
@@ -234,7 +229,7 @@ def test_run_sweep_launches_when_absent_and_passes_params() -> None:
         train_uri="gs://b/train.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
         launch_fn=fake_launch,
-        wait_fn=lambda _c, _n: _job(),
+        wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
     )
     assert seen["params"] == {"epochs": 2, "adapter_size": 8}
@@ -254,7 +249,7 @@ def test_run_sweep_forwards_labels_to_launcher() -> None:
         labels: dict[str, str] | None = None,
     ) -> SimpleNamespace:
         seen["labels"] = labels
-        return _job()
+        return make_job()
 
     run_sweep(
         client,
@@ -262,7 +257,7 @@ def test_run_sweep_forwards_labels_to_launcher() -> None:
         train_uri="gs://b/train.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
         launch_fn=fake_launch,
-        wait_fn=lambda _c, _n: _job(),
+        wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
         labels={"project": "geap-tuning"},
     )
@@ -284,7 +279,7 @@ def test_run_sweep_adds_method_and_experiment_labels() -> None:
         labels: dict[str, str] | None = None,
     ) -> SimpleNamespace:
         seen["labels"] = labels
-        return _job()
+        return make_job()
 
     run_sweep(
         client,
@@ -292,7 +287,7 @@ def test_run_sweep_adds_method_and_experiment_labels() -> None:
         train_uri="gs://b/train.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
         launch_fn=fake_launch,
-        wait_fn=lambda _c, _n: _job(),
+        wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
         experiment="geap-doe-rlft-rewards",
         labels={"project": "geap-tuning"},
@@ -312,7 +307,7 @@ def test_run_sweep_default_launcher_threads_labels_to_tune() -> None:
         SweepConfig(name="s", grid={"epochs": [1]}),
         train_uri="gs://b/train.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
-        wait_fn=lambda _c, _n: _job(),
+        wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
         labels={"project": "geap-tuning"},
     )
@@ -333,7 +328,7 @@ def test_run_sweep_default_launcher_calls_tune_with_params() -> None:
         train_uri="gs://b/train.jsonl",
         val_uri="gs://b/val.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
-        wait_fn=lambda _c, _n: _job(),
+        wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
     )
     cfg = client.tunings.tune.call_args.kwargs["config"]
@@ -348,8 +343,8 @@ def test_run_sweep_logs_to_experiments_when_named(no_tracking: dict[str, MagicMo
         SweepConfig(name="s", grid={"epochs": [1]}),
         train_uri="gs://b/train.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.9, "macro_f1": 0.8, "report": {}},
-        wait_fn=lambda _c, _n: _job(),
-        find_fn=lambda _c, _dn, **_k: _job(),
+        wait_fn=lambda _c, _n: make_job(),
+        find_fn=lambda _c, _dn, **_k: make_job(),
         experiment="exp",
     )
     no_tracking["track"].assert_called_once()
@@ -364,8 +359,8 @@ def test_run_sweep_skips_experiments_when_none(no_tracking: dict[str, MagicMock]
         SweepConfig(name="s", grid={"epochs": [1]}),
         train_uri="gs://b/train.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.9},
-        wait_fn=lambda _c, _n: _job(),
-        find_fn=lambda _c, _dn, **_k: _job(),
+        wait_fn=lambda _c, _n: make_job(),
+        find_fn=lambda _c, _dn, **_k: make_job(),
     )
     no_tracking["track"].assert_not_called()
     no_tracking["log"].assert_not_called()
@@ -386,7 +381,7 @@ def test_run_sweep_dispatches_dpo() -> None:
         SweepConfig(name="s", method="DPO", grid={"beta": [0.1], "epochs": [1]}),
         train_uri="gs://b/train.jsonl",
         evaluate_fn=lambda _ep: {"win_rate": 0.5},
-        wait_fn=lambda _c, _n: _job(),
+        wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
     )
     cfg = client.tunings.tune.call_args.kwargs["config"]
@@ -407,7 +402,7 @@ def test_run_sweep_dispatches_rlft() -> None:
         ),
         train_uri="gs://b/train.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
-        wait_fn=lambda _c, _n: _job(),
+        wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
     )
     cfg = client.tunings.tune.call_args.kwargs["config"]
@@ -425,7 +420,7 @@ def test_run_sweep_unknown_method_raises() -> None:
             SweepConfig(name="s", method="XYZ", grid={"epochs": [1]}),
             train_uri="gs://b/train.jsonl",
             evaluate_fn=lambda _ep: {"accuracy": 0.5},
-            wait_fn=lambda _c, _n: _job(),
+            wait_fn=lambda _c, _n: make_job(),
             find_fn=lambda _c, _dn, **_k: None,
         )
 
@@ -460,7 +455,7 @@ def test_run_sweep_logs_only_scalar_params(no_tracking: dict[str, MagicMock]) ->
         ),
         train_uri="gs://b/train.jsonl",
         evaluate_fn=lambda _ep: {"accuracy": 0.5},
-        wait_fn=lambda _c, _n: _job(),
+        wait_fn=lambda _c, _n: make_job(),
         find_fn=lambda _c, _dn, **_k: None,
         experiment="exp",
     )
@@ -476,8 +471,8 @@ def test_run_sweep_logs_only_scalar_params(no_tracking: dict[str, MagicMock]) ->
 
 def test_collect_checkpoint_curve_orders_by_epoch() -> None:
     checkpoints = [
-        SimpleNamespace(checkpoint_id="c2", epoch=2, step=20, endpoint="ep/c2"),
-        SimpleNamespace(checkpoint_id="c1", epoch=1, step=10, endpoint="ep/c1"),
+        make_checkpoint("c2", epoch=2, step=20, endpoint="ep/c2"),
+        make_checkpoint("c1", epoch=1, step=10, endpoint="ep/c1"),
     ]
     job = SimpleNamespace(tuned_model=SimpleNamespace(checkpoints=checkpoints))
     scores = {"ep/c1": {"accuracy": 0.6}, "ep/c2": {"accuracy": 0.9}}
