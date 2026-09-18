@@ -45,8 +45,34 @@ tidiness/quota task, not an urgent money-stopper.
 
 ## Teardown reality
 
-The repo has **create-only tooling** (`scripts/bootstrap_gcp.sh`) and **no
-teardown script**, so removing endpoints is manual:
+`scripts/cleanup_endpoints.sh` is the teardown counterpart to
+`scripts/bootstrap_gcp.sh`. It reads the same `.env`, is **dry-run by default**,
+and only ever considers display names matching `--prefix` (default `geap-`), so
+unrelated workloads in the project are never candidates:
+
+```bash
+./scripts/cleanup_endpoints.sh                            # dry run, all geap-*
+./scripts/cleanup_endpoints.sh --prefix geap-doe-         # narrow the blast radius
+./scripts/cleanup_endpoints.sh --keep geap-sft-support-intent
+./scripts/cleanup_endpoints.sh --older-than 30            # only endpoints >30 days old
+./scripts/cleanup_endpoints.sh --prefix geap-doe- --yes   # actually delete
+```
+
+It undeploys each model before deleting its endpoint, which is the ordering the
+API requires. Deletion is irreversible: getting a checkpoint back means re-running
+its tuning job.
+
+**Why you will need it.** Every job runs with `export_last_checkpoint_only=False`
+(the default, so `collect_checkpoint_curve` can score each checkpoint) and GEAP
+deploys **one endpoint per exported checkpoint**. An 8-epoch DOE grid point leaves
+~8 endpoints. Measured on this project 2026-09-18: **78 endpoints in
+`us-central1`, 65 of them from this repo**, with 26 created on a single heavy
+sweep day. Since endpoints are serverless (`automaticResources`, no machine type —
+verified on a live endpoint) this costs nothing idle; the risk is the **per-region
+endpoint quota**, where hitting the ceiling mid-sweep surfaces as a confusing
+deployment failure rather than an obvious quota error.
+
+The equivalent manual sequence, if you would rather do it by hand:
 
 ```bash
 gcloud ai endpoints list --region="$GCP_REGION" --project="$PROJECT_ID"
