@@ -33,12 +33,13 @@ import sys
 from pathlib import Path
 
 from geap_tuning.config import genai_client, load_config
-from geap_tuning.gcs import upload_file
+from geap_tuning.gcs import object_fingerprint, upload_file
 from geap_tuning.inference import generate
 from geap_tuning.jobs import (
     find_tuning_job_by_display_name,
     tuned_endpoint,
     wait_for_tuning_job,
+    with_data_fingerprint,
 )
 from geap_tuning.preference.email import (
     EMAIL_DRAFTS,
@@ -130,10 +131,13 @@ def main() -> None:
     train_uri = upload_file(paths["train"], f"{cfg.bucket}/{GCS_PREFIX}/train.jsonl")
     val_uri = upload_file(paths["val"], f"{cfg.bucket}/{GCS_PREFIX}/val.jsonl")
     print(f"Uploaded train={train_uri} val={val_uri}")
+    data_fp = object_fingerprint(train_uri)
 
     # 4. Reuse an existing job if one exists; otherwise launch. A firmer pull toward
     # the preferred (shorter) completion than the defaults (epochs=2, beta=0.1).
-    job = find_tuning_job_by_display_name(client, DISPLAY_NAME, train_uri=train_uri)
+    job = find_tuning_job_by_display_name(
+        client, DISPLAY_NAME, train_uri=train_uri, data_fingerprint=data_fp
+    )
     if job is None:
         job = launch_preference_job(
             client,
@@ -143,7 +147,7 @@ def main() -> None:
             base_model=BASE_MODEL,
             epochs=3,
             beta=0.2,
-            labels=cfg.labels,
+            labels=with_data_fingerprint(cfg.labels, data_fp),
         )
         print(f"Launched tuning job: {job.name}")
     else:

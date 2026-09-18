@@ -1,9 +1,12 @@
 """Tests for Cloud Storage helpers."""
 
+import base64
+import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from google.api_core.exceptions import NotFound
 
 from geap_tuning import gcs
 from geap_tuning.gcs import build_gcs_uri, upload_file, upload_jsonl
@@ -71,3 +74,53 @@ def test_upload_jsonl_threads_the_client(tmp_path: Path) -> None:
     client = MagicMock()
     assert upload_jsonl(src, "gs://b", "p", "d.jsonl", client=client) == "gs://b/p/d.jsonl"
     client.bucket.assert_called_once_with("b")
+
+
+# --- content fingerprint (W-6) ---------------------------------------------------
+
+
+def test_object_fingerprint_reads_md5_without_downloading() -> None:
+    client = MagicMock()
+    blob = client.bucket.return_value.blob.return_value
+    blob.md5_hash = base64.b64encode(bytes.fromhex("aabbccdd" * 4)).decode()
+
+    fp = gcs.object_fingerprint("gs://b/train.jsonl", client=client)
+
+    assert fp == "aabbccddaabbccdd"  # 16 hex chars
+    blob.reload.assert_called_once()  # metadata only
+    blob.download_as_bytes.assert_not_called()
+
+
+def test_object_fingerprint_falls_back_to_crc32c() -> None:
+    # Composite/resumable uploads can have no MD5.
+    client = MagicMock()
+    blob = client.bucket.return_value.blob.return_value
+    blob.md5_hash = None
+    blob.crc32c = base64.b64encode(bytes.fromhex("11223344")).decode()
+    assert gcs.object_fingerprint("gs://b/t.jsonl", client=client) == "11223344"
+
+
+def test_object_fingerprint_returns_none_for_a_missing_object() -> None:
+    client = MagicMock()
+    client.bucket.return_value.blob.return_value.reload.side_effect = NotFound("nope")
+    assert gcs.object_fingerprint("gs://b/absent.jsonl", client=client) is None
+
+
+def test_object_fingerprint_is_label_safe() -> None:
+    client = MagicMock()
+    blob = client.bucket.return_value.blob.return_value
+    blob.md5_hash = base64.b64encode(bytes.fromhex("ff" * 16)).decode()
+    fp = gcs.object_fingerprint("gs://b/t.jsonl", client=client)
+    assert re.fullmatch(r"[a-z0-9_-]{1,63}", fp)  # GCP resource-label value grammar
+
+
+def test_object_fingerprint_differs_for_different_content() -> None:
+    # The whole point: same URI, edited bytes -> different fingerprint.
+    def fp_for(hexdigest: str) -> str | None:
+        client = MagicMock()
+        client.bucket.return_value.blob.return_value.md5_hash = base64.b64encode(
+            bytes.fromhex(hexdigest)
+        ).decode()
+        return gcs.object_fingerprint("gs://b/train.jsonl", client=client)
+
+    assert fp_for("aa" * 16) != fp_for("bb" * 16)

@@ -309,8 +309,20 @@ from our own offline per-checkpoint eval — never from Layer-1.
   (from a key like `adapter_size` or a `.`→`_` float) makes `aiplatform.start_run`
   400 with `resource ID … must match the regular expression`. `run_spec_slug`
   lowercases and maps every non-`[a-z0-9-]` char to `-` for this reason.
-- **Idempotency is by display name.** Re-running a sweep reuses finished jobs; to
-  force a re-tune, change `sweep.name` or the grid (both change the slug).
+- **Idempotency is by display name *and* dataset content.** Re-running a sweep
+  reuses finished jobs; to force a re-tune, change `sweep.name` or the grid (both
+  change the slug) — **or just edit the data**. Display name alone used to be the
+  whole key, which silently reused a model trained on superseded data whenever a
+  dataset was overwritten at its (always fixed) staging path. `run_sweep` now
+  fingerprints the staged training object via `gcs.object_fingerprint` — a
+  metadata-only read of the checksum Cloud Storage already stores, so nothing is
+  downloaded — records it on each job as the `data_fingerprint` resource label
+  (`jobs.with_data_fingerprint`), and passes it to
+  `find_tuning_job_by_display_name`, which refuses to reuse a job trained on
+  different bytes. Fingerprinting is best-effort: if the object cannot be read the
+  sweep proceeds with URI-only matching rather than failing before it starts, and
+  a job predating the label is still reused with a printed note. The same wiring
+  is applied in the 11 single-job examples.
 - **Curves need all checkpoints.** `run_sweep`'s default launcher sets
   `export_last_checkpoint_only=False`; a custom `launch_fn` must too, or
   `collect_checkpoint_curve` sees only the final checkpoint.

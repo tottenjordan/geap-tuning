@@ -31,6 +31,10 @@ _REUSABLE_STATES = ("JOB_STATE_SUCCEEDED", "JOB_STATE_RUNNING", "JOB_STATE_PENDI
 # that is wedged in a non-terminal state.
 _DEFAULT_TIMEOUT = 4 * 60 * 60
 
+# Resource label carrying the fingerprint of the dataset a job trained on, so
+# reuse can compare content and not just the (always identical) staging URI.
+DATA_FINGERPRINT_LABEL = "data_fingerprint"
+
 # Where each tuning method records the dataset it trained from.
 _TUNING_SPECS = (
     "supervised_tuning_spec",
@@ -76,12 +80,43 @@ def job_training_uri(job: Any) -> str | None:  # noqa: ANN401 - SDK job type is 
     return None
 
 
+def with_data_fingerprint(
+    labels: dict[str, str] | None,
+    fingerprint: str | None,
+) -> dict[str, str] | None:
+    """Return ``labels`` plus the dataset fingerprint, so reuse can compare content.
+
+    Pair with ``data_fingerprint=`` on :func:`find_tuning_job_by_display_name`: the
+    launcher records the fingerprint here, the lookup checks it later. Returns
+    ``labels`` untouched when the fingerprint is unknown (e.g. Cloud Storage was
+    unreachable), keeping this a safe drop-in.
+    """
+    if not fingerprint:
+        return labels
+    return {**(labels or {}), DATA_FINGERPRINT_LABEL: fingerprint}
+
+
+def _fingerprint_allows_reuse(job: Any, expected: str) -> bool:  # noqa: ANN401 - SDK job
+    """Return whether ``job`` may be reused for a dataset fingerprinted ``expected``."""
+    recorded = (getattr(job, "labels", None) or {}).get(DATA_FINGERPRINT_LABEL)
+    if not recorded:
+        # Launched before fingerprints were recorded: unknowable, so allow reuse but
+        # say so — silence here is exactly the failure mode this check exists for.
+        print(
+            f"note: reusing {getattr(job, 'name', '?')} which records no dataset "
+            f"fingerprint; if you have edited the data since, change the display name"
+        )
+        return True
+    return recorded == expected
+
+
 def find_tuning_job_by_display_name(
     client: Any,  # noqa: ANN401 - SDK client type is dynamic
     display_name: str,
     *,
     states: Sequence[str] = _REUSABLE_STATES,
     train_uri: str | None = None,
+    data_fingerprint: str | None = None,
 ) -> Any | None:  # noqa: ANN401 - returns the SDK job object or None
     """Return the **most recent** reusable job matching ``display_name``, or ``None``.
 
@@ -94,15 +129,18 @@ def find_tuning_job_by_display_name(
       practice, because a FAILED job is not reusable and so triggers a relaunch
       under the same name. Candidates are ordered by ``create_time`` (descending)
       instead of returning whichever the API listed first.
-    - **``train_uri`` gates reuse on the dataset.** When given, a candidate trained
-      from a different URI is not reused.
+    - **``train_uri`` gates reuse on the dataset path.** When given, a candidate
+      trained from a different URI is not reused.
+    - **``data_fingerprint`` gates reuse on the dataset *content*.** Every driver
+      stages to a fixed path, so comparing URIs alone cannot tell an edited dataset
+      from the original. Pass the content fingerprint (see
+      :func:`geap_tuning.gcs.object_fingerprint`) and a job trained on different
+      bytes is not reused, even at the same URI. It travels on the job as the
+      :data:`DATA_FINGERPRINT_LABEL` resource label.
 
-    .. warning::
-       A dataset **overwritten at the same URI** cannot be detected here — the job
-       records only the URI, not the content, so the check passes. Every driver
-       stages to a fixed path, so editing your data and re-running *will* still
-       reuse the old model. Change the display name (for a sweep, ``sweep.name``)
-       to force a fresh job after a data change.
+    A candidate carrying **no** fingerprint label — one launched before this was
+    recorded — is still reused, because its data cannot be compared. A note is
+    printed so that ambiguity is visible rather than silent.
     """
     matches = [
         job
@@ -111,6 +149,8 @@ def find_tuning_job_by_display_name(
     ]
     if train_uri is not None:
         matches = [job for job in matches if (job_training_uri(job) or train_uri) == train_uri]
+    if data_fingerprint is not None:
+        matches = [job for job in matches if _fingerprint_allows_reuse(job, data_fingerprint)]
     if not matches:
         return None
     return max(matches, key=lambda job: getattr(job, "create_time", None) or _EPOCH)
