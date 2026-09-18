@@ -109,7 +109,7 @@ def main() -> None:
 
     # 3. Reuse an existing job if one exists; otherwise launch with eval attached.
     #    export_last_checkpoint_only=False (default) so eval runs per checkpoint.
-    job = find_tuning_job_by_display_name(client, DISPLAY_NAME)
+    job = find_tuning_job_by_display_name(client, DISPLAY_NAME, train_uri=train_uri)
     if job is None:
         job = launch_sft_job(
             client,

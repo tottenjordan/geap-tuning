@@ -49,7 +49,12 @@ from geap_tuning.rlft.constrained import (
 )
 from geap_tuning.rlft.constraint_eval import run_eval
 from geap_tuning.rlft.evaluate import bootstrap_ci
-from geap_tuning.rlft.tune import build_reward_config, launch_rlft_job, validate_reward_config
+from geap_tuning.rlft.tune import (
+    build_reward_config,
+    launch_rlft_job,
+    raise_for_invalid_reward,
+    validate_reward_config,
+)
 
 DISPLAY_NAME = "geap-rlft-constrained"
 DATA_DIR = Path("datasets/rlft_constrained")
@@ -104,13 +109,15 @@ def main() -> None:
 
     # 2. Preflight the graded reward on one training record before spending money.
     reward_cfg = build_reward_config("constraint_satisfaction", module=constraint_reward)
-    preflight = validate_reward_config(
-        client,
-        project=cfg.project,
-        location=cfg.location,
-        sample_answer="A short reply that mentions the required keywords.",
-        example_record=train_records[0],
-        reward_config=reward_cfg,
+    preflight = raise_for_invalid_reward(
+        validate_reward_config(
+            client,
+            project=cfg.project,
+            location=cfg.location,
+            sample_answer="A short reply that mentions the required keywords.",
+            example_record=train_records[0],
+            reward_config=reward_cfg,
+        )
     )
     print(f"Reward preflight: {preflight}")
 
@@ -136,7 +143,7 @@ def main() -> None:
     print(f"Uploaded train={train_uri} val={val_uri}")
 
     # 5. Reuse an existing job if one exists; otherwise launch.
-    job = find_tuning_job_by_display_name(client, DISPLAY_NAME)
+    job = find_tuning_job_by_display_name(client, DISPLAY_NAME, train_uri=train_uri)
     if job is None:
         job = launch_rlft_job(
             client,

@@ -478,3 +478,94 @@ def test_collect_checkpoint_curve_orders_by_epoch() -> None:
     scores = {"ep/c1": {"accuracy": 0.6}, "ep/c2": {"accuracy": 0.9}}
     curve = collect_checkpoint_curve(job, lambda ep: scores[ep], metric="accuracy")
     assert curve == [(1, 0.6), (2, 0.9)]
+
+
+# --- run_sweep: per-run failure isolation (W-5) ----------------------------------
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_isolates_a_failing_run(capsys: pytest.CaptureFixture[str]) -> None:
+    # A sweep costs hours; one bad grid point must not discard the finished ones.
+    client = MagicMock()
+
+    def flaky_evaluate(endpoint: str) -> dict[str, float]:
+        if endpoint.endswith("boom"):
+            msg = "transient endpoint error"
+            raise RuntimeError(msg)
+        return {"accuracy": 0.9}
+
+    states = iter(["ok", "boom", "ok"])
+    results = run_sweep(
+        client,
+        SweepConfig(name="s", grid={"epochs": [1, 2, 3]}),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=flaky_evaluate,
+        launch_fn=MagicMock(return_value=make_job()),
+        wait_fn=lambda _c, _n: make_job(endpoint=f"ep/{next(states)}"),
+        find_fn=lambda _c, _dn, **_k: None,
+    )
+
+    assert len(results) == 2  # the two healthy points survive
+    out = capsys.readouterr().out
+    assert "FAILED" in out
+    assert "1/3 run(s) failed" in out
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_raises_when_every_run_fails() -> None:
+    client = MagicMock()
+
+    def always_fails(_endpoint: str) -> dict[str, float]:
+        msg = "nope"
+        raise RuntimeError(msg)
+
+    with pytest.raises(RuntimeError, match="Every run in sweep"):
+        run_sweep(
+            client,
+            SweepConfig(name="s", grid={"epochs": [1, 2]}),
+            train_uri="gs://b/train.jsonl",
+            evaluate_fn=always_fails,
+            launch_fn=MagicMock(return_value=make_job()),
+            wait_fn=lambda _c, _n: make_job(),
+            find_fn=lambda _c, _dn, **_k: None,
+        )
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_prints_progress(capsys: pytest.CaptureFixture[str]) -> None:
+    # Without this a sweep is silent for hours.
+    client = MagicMock()
+    run_sweep(
+        client,
+        SweepConfig(name="s", grid={"epochs": [1, 2]}),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=lambda _ep: {"accuracy": 0.5},
+        launch_fn=MagicMock(return_value=make_job()),
+        wait_fn=lambda _c, _n: make_job(),
+        find_fn=lambda _c, _dn, **_k: None,
+    )
+    out = capsys.readouterr().out
+    assert "[1/2]" in out
+    assert "[2/2]" in out
+    assert "done" in out
+
+
+@pytest.mark.usefixtures("no_tracking")
+def test_run_sweep_passes_train_uri_to_the_reuse_lookup() -> None:
+    # Reuse must be dataset-aware, not name-only.
+    client = MagicMock()
+    seen: dict[str, object] = {}
+
+    def find(_client: object, _display_name: str, **kwargs: object) -> None:
+        seen.update(kwargs)
+
+    run_sweep(
+        client,
+        SweepConfig(name="s", grid={"epochs": [1]}),
+        train_uri="gs://b/train.jsonl",
+        evaluate_fn=lambda _ep: {"accuracy": 0.5},
+        launch_fn=MagicMock(return_value=make_job()),
+        wait_fn=lambda _c, _n: make_job(),
+        find_fn=find,
+    )
+    assert seen["train_uri"] == "gs://b/train.jsonl"

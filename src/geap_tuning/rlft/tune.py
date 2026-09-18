@@ -13,6 +13,7 @@ self-contained demo.
 from __future__ import annotations
 
 import inspect
+import math
 from typing import TYPE_CHECKING, Any
 
 from google.genai import types
@@ -288,3 +289,26 @@ def validate_reward_config(  # noqa: PLR0913 - explicit preflight inputs, all ke
         single_reward_config=single_reward,
         composite_reward_config=composite_reward_config,
     )
+
+
+def raise_for_invalid_reward(response: Any) -> Any:  # noqa: ANN401 - SDK response type
+    """Return ``response`` unchanged, or raise if the preflight says the reward is broken.
+
+    :func:`validate_reward_config` only *reports*: a non-null ``error`` or a ``NaN``
+    ``overall_reward`` means the reward function is broken, but callers that merely
+    printed the response went on to launch a paid RLFT job anyway (GEAP auto-stops
+    only after >80% of reward calls fail). Passing the response through this turns
+    that into an abort before any spend.
+    """
+    error = getattr(response, "error", None)
+    if error:
+        msg = f"Reward preflight failed: {error}"
+        raise RuntimeError(msg)
+    reward = getattr(response, "overall_reward", None)
+    if reward is not None and math.isnan(reward):
+        msg = (
+            "Reward preflight returned NaN overall_reward, which means the reward "
+            "function errored on the sample; fix it before launching a paid job."
+        )
+        raise RuntimeError(msg)
+    return response

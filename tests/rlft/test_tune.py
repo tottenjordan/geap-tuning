@@ -1,5 +1,6 @@
 """Tests for the RLFT job launcher and reward preflight (mocked client)."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,6 +14,7 @@ from geap_tuning.rlft.tune import (
     build_reward_config,
     build_string_match_reward_config,
     launch_rlft_job,
+    raise_for_invalid_reward,
     validate_reward_config,
 )
 
@@ -258,3 +260,30 @@ def test_launch_rlft_job_labels_default_none() -> None:
     client = MagicMock()
     launch_rlft_job(client, train_uri="gs://b/t.jsonl", display_name="d")
     assert client.tunings.tune.call_args.kwargs["config"].labels is None
+
+
+# --- reward preflight guard ------------------------------------------------------
+
+
+def test_raise_for_invalid_reward_passes_a_healthy_response() -> None:
+    response = SimpleNamespace(error=None, overall_reward=1.0)
+    assert raise_for_invalid_reward(response) is response
+
+
+def test_raise_for_invalid_reward_rejects_an_error() -> None:
+    response = SimpleNamespace(error="NameError: evaluate is not defined", overall_reward=None)
+    with pytest.raises(RuntimeError, match="NameError"):
+        raise_for_invalid_reward(response)
+
+
+def test_raise_for_invalid_reward_rejects_nan() -> None:
+    # NaN is the SDK's way of saying the reward function blew up on the sample.
+    response = SimpleNamespace(error=None, overall_reward=float("nan"))
+    with pytest.raises(RuntimeError, match="NaN"):
+        raise_for_invalid_reward(response)
+
+
+def test_raise_for_invalid_reward_allows_zero_reward() -> None:
+    # 0.0 is a legitimate score, not a failure.
+    response = SimpleNamespace(error=None, overall_reward=0.0)
+    assert raise_for_invalid_reward(response) is response

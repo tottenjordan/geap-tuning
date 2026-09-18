@@ -11,6 +11,7 @@ and continuous-tuning helpers below (see
 
 from __future__ import annotations
 
+import datetime
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -29,6 +30,16 @@ _REUSABLE_STATES = ("JOB_STATE_SUCCEEDED", "JOB_STATE_RUNNING", "JOB_STATE_PENDI
 # Tuning takes 30-60 minutes; 4h is generous headroom while still bounding a job
 # that is wedged in a non-terminal state.
 _DEFAULT_TIMEOUT = 4 * 60 * 60
+
+# Where each tuning method records the dataset it trained from.
+_TUNING_SPECS = (
+    "supervised_tuning_spec",
+    "preference_optimization_spec",
+    "reinforcement_tuning_spec",
+)
+# Sort floor for jobs whose create_time the SDK did not populate, so they lose
+# the recency tiebreak rather than crashing the comparison.
+_EPOCH = datetime.datetime.fromtimestamp(0, tz=datetime.UTC)
 # Print a heartbeat on every state change, and otherwise once every N polls, so a
 # 60-minute wait yields a readable trail rather than 60 identical lines.
 _HEARTBEAT_EVERY = 5
@@ -50,21 +61,59 @@ def tuned_endpoint(job: Any) -> str:  # noqa: ANN401 - SDK job type is dynamic
     return endpoint
 
 
+def job_training_uri(job: Any) -> str | None:  # noqa: ANN401 - SDK job type is dynamic
+    """Return the training dataset URI a job was launched with, across all methods.
+
+    SFT, DPO and RLFT each record it under their own spec
+    (``supervised_tuning_spec`` / ``preference_optimization_spec`` /
+    ``reinforcement_tuning_spec``); returns ``None`` if none is populated.
+    """
+    for spec_name in _TUNING_SPECS:
+        spec = getattr(job, spec_name, None)
+        uri = getattr(spec, "training_dataset_uri", None) if spec else None
+        if uri:
+            return uri
+    return None
+
+
 def find_tuning_job_by_display_name(
     client: Any,  # noqa: ANN401 - SDK client type is dynamic
     display_name: str,
     *,
     states: Sequence[str] = _REUSABLE_STATES,
+    train_uri: str | None = None,
 ) -> Any | None:  # noqa: ANN401 - returns the SDK job object or None
-    """Return the first existing job matching ``display_name`` in a reusable state.
+    """Return the **most recent** reusable job matching ``display_name``, or ``None``.
 
     Lets an example reuse a prior run instead of launching (and paying for) a
-    duplicate tuning job. Returns ``None`` when there is no match.
+    duplicate tuning job.
+
+    Two correctness details beyond a plain name match:
+
+    - **Most recent wins.** Duplicates under one display name are reachable in
+      practice, because a FAILED job is not reusable and so triggers a relaunch
+      under the same name. Candidates are ordered by ``create_time`` (descending)
+      instead of returning whichever the API listed first.
+    - **``train_uri`` gates reuse on the dataset.** When given, a candidate trained
+      from a different URI is not reused.
+
+    .. warning::
+       A dataset **overwritten at the same URI** cannot be detected here — the job
+       records only the URI, not the content, so the check passes. Every driver
+       stages to a fixed path, so editing your data and re-running *will* still
+       reuse the old model. Change the display name (for a sweep, ``sweep.name``)
+       to force a fresh job after a data change.
     """
-    for job in client.tunings.list():
-        if job.tuned_model_display_name == display_name and job.state in states:
-            return job
-    return None
+    matches = [
+        job
+        for job in client.tunings.list()
+        if job.tuned_model_display_name == display_name and job.state in states
+    ]
+    if train_uri is not None:
+        matches = [job for job in matches if (job_training_uri(job) or train_uri) == train_uri]
+    if not matches:
+        return None
+    return max(matches, key=lambda job: getattr(job, "create_time", None) or _EPOCH)
 
 
 def cancel_tuning_job(

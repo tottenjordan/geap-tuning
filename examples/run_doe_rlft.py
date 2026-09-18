@@ -53,7 +53,11 @@ from geap_tuning.rlft.data import (
     split_dataset,
 )
 from geap_tuning.rlft.evaluate import run_rlft_eval
-from geap_tuning.rlft.tune import build_string_match_reward_config, validate_reward_config
+from geap_tuning.rlft.tune import (
+    build_string_match_reward_config,
+    raise_for_invalid_reward,
+    validate_reward_config,
+)
 
 EXPERIMENT_NAME = "geap-doe-rlft"
 DATA_DIR = Path("datasets/rlft_math")
@@ -88,13 +92,15 @@ def main() -> None:
     test_records = build_rlft_records(test_problems)
 
     # 2. Preflight the string-match reward on one record before spending money.
-    preflight = validate_reward_config(
-        client,
-        project=cfg.project,
-        location=cfg.location,
-        sample_answer="Answer: 4",
-        example_record=train_records[0],
-        reward_config=build_string_match_reward_config(),
+    preflight = raise_for_invalid_reward(
+        validate_reward_config(
+            client,
+            project=cfg.project,
+            location=cfg.location,
+            sample_answer="Answer: 4",
+            example_record=train_records[0],
+            reward_config=build_string_match_reward_config(),
+        )
     )
     print(f"Reward preflight: {preflight}")
 

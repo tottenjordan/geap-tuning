@@ -63,6 +63,7 @@ from geap_tuning.rlft.evaluate import run_rlft_eval
 from geap_tuning.rlft.tune import (
     build_string_match_reward_config,
     launch_rlft_job,
+    raise_for_invalid_reward,
     validate_reward_config,
 )
 
@@ -97,18 +98,20 @@ def main() -> None:
     # 2. Preflight the declarative string-match reward before spending money.
     reward = build_string_match_reward_config()
     train_records = build_rlft_records(split_dataset(MATH_PROBLEMS)[0])
-    preflight = validate_reward_config(
-        client,
-        project=cfg.project,
-        location=cfg.location,
-        sample_answer="Answer: 4",
-        example_record=train_records[0],
-        reward_config=reward,
+    preflight = raise_for_invalid_reward(
+        validate_reward_config(
+            client,
+            project=cfg.project,
+            location=cfg.location,
+            sample_answer="Answer: 4",
+            example_record=train_records[0],
+            reward_config=reward,
+        )
     )
     print(f"Reward preflight: {preflight}")
 
     # 3. Reuse or launch a single RLFT job that exports intermediate checkpoints.
-    job = find_tuning_job_by_display_name(client, DISPLAY_NAME)
+    job = find_tuning_job_by_display_name(client, DISPLAY_NAME, train_uri=train_uri)
     if job is None:
         job = launch_rlft_job(
             client,

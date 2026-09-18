@@ -116,7 +116,7 @@ def _run_experiment(
 ) -> Any:  # noqa: ANN401 - returns the SDK tuning job
     """Reuse-or-launch one SFT job for ``experiment`` and wait for completion."""
     display_name = f"geap-sft-vision-{experiment['name']}"
-    job = find_tuning_job_by_display_name(client, display_name)
+    job = find_tuning_job_by_display_name(client, display_name, train_uri=train_uri)
     if job is None:
         job = launch_sft_job(
             client,

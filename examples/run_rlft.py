@@ -40,7 +40,7 @@ from geap_tuning.rlft.data import (
     split_dataset,
 )
 from geap_tuning.rlft.evaluate import run_rlft_eval
-from geap_tuning.rlft.tune import launch_rlft_job, validate_reward_config
+from geap_tuning.rlft.tune import launch_rlft_job, raise_for_invalid_reward, validate_reward_config
 
 DISPLAY_NAME = "geap-rlft-math"
 DATA_DIR = Path("datasets/rlft_math")
@@ -60,12 +60,14 @@ def main() -> None:
 
     # 2. Preflight the reward on the first training record before spending money.
     train_records = build_rlft_records(split_dataset(MATH_PROBLEMS)[0])
-    preflight = validate_reward_config(
-        client,
-        project=cfg.project,
-        location=cfg.location,
-        sample_answer="Answer: 4",
-        example_record=train_records[0],
+    preflight = raise_for_invalid_reward(
+        validate_reward_config(
+            client,
+            project=cfg.project,
+            location=cfg.location,
+            sample_answer="Answer: 4",
+            example_record=train_records[0],
+        )
     )
     print(f"Reward preflight: {preflight}")
 
@@ -75,7 +77,7 @@ def main() -> None:
     print(f"Uploaded train={train_uri} val={val_uri}")
 
     # 4. Reuse an existing job if one exists; otherwise launch.
-    job = find_tuning_job_by_display_name(client, DISPLAY_NAME)
+    job = find_tuning_job_by_display_name(client, DISPLAY_NAME, train_uri=train_uri)
     if job is None:
         job = launch_rlft_job(
             client,

@@ -314,23 +314,46 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     Model/Endpoint), merged with two DOE-managed labels — ``tuning_method`` (the
     lowercased sweep method) and ``experiment`` (when set) — so every job is
     self-describing in the console; none of these are logged as Experiments
-    params. Returns one :class:`RunResult` per spec, ready for
+    params.
+
+    **Failures are isolated per grid point.** A sweep costs hours and money, so one
+    bad run no longer voids the rest: the failure is reported and the sweep
+    continues, so only runs that succeeded appear in the returned list (compare
+    ``len(results)`` against the grid size). If *every* run fails, this raises.
+    Progress is printed per run, since a sweep is otherwise silent for hours.
+
+    Returns one :class:`RunResult` per **successful** spec, ready for
     :func:`aggregate_results` / :func:`select_best_run`.
     """
     launch = launch_fn or _LAUNCHERS[sweep.method]
     run_labels = _run_labels(sweep, experiment, labels)
+    specs = build_run_specs(sweep)
     results: list[RunResult] = []
-    for spec in build_run_specs(sweep):
-        existing = find_fn(client, spec.display_name)
-        reused = existing is not None
-        job = existing if reused else launch(client, spec, train_uri, val_uri, run_labels)
-        job = wait_fn(client, job.name)
-        endpoint = tuned_endpoint(job)
-        metrics = evaluate_fn(endpoint)
-        if experiment is not None:
-            params = _scalar_params({"base_model": spec.base_model, **spec.params})
-            with track_run(spec.display_name, params=params):
-                log_summary_metrics(_numeric_metrics(metrics))
+    failures: list[tuple[str, Exception]] = []
+
+    for index, spec in enumerate(specs, start=1):
+        print(f"[{index}/{len(specs)}] {spec.display_name}: starting")
+        try:
+            existing = find_fn(client, spec.display_name, train_uri=train_uri)
+            reused = existing is not None
+            if reused:
+                print(f"[{index}/{len(specs)}] {spec.display_name}: reusing job {existing.name}")
+            job = existing if reused else launch(client, spec, train_uri, val_uri, run_labels)
+            job = wait_fn(client, job.name)
+            endpoint = tuned_endpoint(job)
+            metrics = evaluate_fn(endpoint)
+            if experiment is not None:
+                params = _scalar_params({"base_model": spec.base_model, **spec.params})
+                with track_run(spec.display_name, params=params):
+                    log_summary_metrics(_numeric_metrics(metrics))
+        except Exception as exc:  # noqa: BLE001 - one bad grid point must not void the rest
+            # A sweep costs hours and money; losing three finished runs because the
+            # fourth hit a transient error is the expensive failure mode.
+            print(f"[{index}/{len(specs)}] {spec.display_name}: FAILED ({exc}); skipping")
+            failures.append((spec.display_name, exc))
+            continue
+
+        print(f"[{index}/{len(specs)}] {spec.display_name}: done ({_numeric_metrics(metrics)})")
         results.append(
             RunResult(
                 spec=spec,
@@ -340,6 +363,14 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
                 reused=reused,
             )
         )
+
+    if failures:
+        print(f"Sweep finished with {len(failures)}/{len(specs)} run(s) failed:")
+        for name, exc in failures:
+            print(f"  - {name}: {type(exc).__name__}: {exc}")
+    if not results and failures:
+        msg = f"Every run in sweep {sweep.name!r} failed ({len(failures)}/{len(specs)})"
+        raise RuntimeError(msg)
     return results
 
 
