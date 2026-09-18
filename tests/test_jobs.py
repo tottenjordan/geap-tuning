@@ -172,3 +172,72 @@ def test_cancel_tuning_job_by_display_name_missing() -> None:
     ]
     assert cancel_tuning_job_by_display_name(client, "geap-rlft-math-v1") is None
     client.tunings.cancel.assert_not_called()
+
+
+# --- wait_for_tuning_job: bounding, heartbeat, failure detail -------------------
+
+
+def test_wait_times_out_instead_of_polling_forever(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A job wedged in a non-terminal state must not spin indefinitely.
+    client = MagicMock()
+    client.tunings.get.return_value = SimpleNamespace(state="JOB_STATE_RUNNING", name="n")
+    monkeypatch.setattr("geap_tuning.jobs.time.sleep", lambda _: None)
+
+    with pytest.raises(TimeoutError, match="still JOB_STATE_RUNNING"):
+        wait_for_tuning_job(client, "n", poll_interval=0, timeout=0)
+
+
+def test_wait_timeout_none_waits_indefinitely(monkeypatch: pytest.MonkeyPatch) -> None:
+    # timeout=None preserves the original unbounded behaviour; it must still return
+    # once the job reaches a terminal state.
+    client = MagicMock()
+    client.tunings.get.side_effect = [
+        SimpleNamespace(state="JOB_STATE_RUNNING", name="n"),
+        SimpleNamespace(state="JOB_STATE_SUCCEEDED", name="n"),
+    ]
+    monkeypatch.setattr("geap_tuning.jobs.time.sleep", lambda _: None)
+
+    job = wait_for_tuning_job(client, "n", poll_interval=0, timeout=None)
+    assert job.state == "JOB_STATE_SUCCEEDED"
+
+
+def test_wait_prints_a_heartbeat(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    client = MagicMock()
+    client.tunings.get.side_effect = [
+        SimpleNamespace(state="JOB_STATE_RUNNING", name="n"),
+        SimpleNamespace(state="JOB_STATE_SUCCEEDED", name="n"),
+    ]
+    monkeypatch.setattr("geap_tuning.jobs.time.sleep", lambda _: None)
+
+    wait_for_tuning_job(client, "projects/p/locations/l/tuningJobs/123", poll_interval=0)
+
+    out = capsys.readouterr().out
+    assert "123" in out  # short job id, not the full resource path
+    assert "JOB_STATE_RUNNING" in out
+    assert "JOB_STATE_SUCCEEDED" in out  # state change always prints
+    assert "elapsed" in out
+
+
+def test_wait_heartbeat_can_be_silenced(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    client = MagicMock()
+    client.tunings.get.return_value = SimpleNamespace(state="JOB_STATE_SUCCEEDED", name="n")
+    monkeypatch.setattr("geap_tuning.jobs.time.sleep", lambda _: None)
+
+    wait_for_tuning_job(client, "n", poll_interval=0, heartbeat=False)
+    assert capsys.readouterr().out == ""
+
+
+def test_wait_surfaces_the_sdk_error_detail(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Without this the caller gets only a state string and must open the console.
+    client = MagicMock()
+    client.tunings.get.return_value = SimpleNamespace(
+        state="JOB_STATE_FAILED", name="n", error="quota exceeded for adapter size 16"
+    )
+    monkeypatch.setattr("geap_tuning.jobs.time.sleep", lambda _: None)
+
+    with pytest.raises(RuntimeError, match="quota exceeded for adapter size 16"):
+        wait_for_tuning_job(client, "n", poll_interval=0)

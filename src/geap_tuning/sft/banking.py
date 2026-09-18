@@ -22,6 +22,7 @@ from geap_tuning.schemas import Record, sft_example, write_jsonl
 
 _RAW = "https://raw.githubusercontent.com/PolyAI-LDN/task-specific-datasets/master/banking_data"
 BANKING77_URLS = {"train": f"{_RAW}/train.csv", "test": f"{_RAW}/test.csv"}
+_DOWNLOAD_TIMEOUT = 60.0  # seconds; urlopen defaults to no timeout at all
 
 type Pair = tuple[str, str]  # (customer message, intent label)
 
@@ -88,7 +89,25 @@ def parse_banking_prediction(text: str, labels: tuple[str, ...]) -> str:
     return norm
 
 
-def download_banking77(cache_dir: str | Path) -> dict[str, Path]:  # pragma: no cover
+def _download_to(url: str, dest: Path) -> None:
+    """Fetch ``url`` to ``dest`` atomically.
+
+    Downloads to a sibling ``.part`` file and :func:`os.replace`\\ s it into place,
+    which is atomic on the same filesystem. Writing straight to ``dest`` meant an
+    interrupted fetch left a truncated CSV that the ``dest.exists()`` cache check
+    then treated as valid forever, so every later run silently trained on a partial
+    dataset.
+    """
+    tmp = dest.with_name(dest.name + ".part")
+    try:
+        with urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT) as response:  # noqa: S310 - fixed https URL
+            tmp.write_bytes(response.read())
+        tmp.replace(dest)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def download_banking77(cache_dir: str | Path) -> dict[str, Path]:
     """Download and cache the train/test CSVs; return ``{'train': path, 'test': path}``."""
     cache = Path(cache_dir)
     cache.mkdir(parents=True, exist_ok=True)
@@ -96,7 +115,7 @@ def download_banking77(cache_dir: str | Path) -> dict[str, Path]:  # pragma: no 
     for split, url in BANKING77_URLS.items():
         dest = cache / f"{split}.csv"
         if not dest.exists():
-            urllib.request.urlretrieve(url, dest)  # noqa: S310 - fixed https URL
+            _download_to(url, dest)
         paths[split] = dest
     return paths
 

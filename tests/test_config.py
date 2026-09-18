@@ -1,14 +1,29 @@
 """Tests for environment/config resolution."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
+from geap_tuning import config as config_module
 from geap_tuning.config import (
     TuningConfig,
     endpoint_location,
+    genai_client,
+    genai_client_for_endpoint,
     load_config,
     requires_global_endpoint,
     resolve_location,
 )
+
+_RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504]
+
+
+@pytest.fixture
+def captured_client(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Replace ``genai.Client`` so the factories can be inspected without a real client."""
+    fake = MagicMock()
+    monkeypatch.setattr(config_module.genai, "Client", fake)
+    return fake
 
 
 def test_resolves_aliases_and_defaults() -> None:
@@ -96,7 +111,7 @@ def test_resolve_location_keeps_region_for_older_models() -> None:
 
 def test_endpoint_location_reads_multi_region_from_resource_name() -> None:
     # Tuned Gemini 3.x endpoints land on the us/eu multi-region, not the region.
-    ep = "projects/934903580331/locations/us/endpoints/4327537029437980672"
+    ep = "projects/p/locations/us/endpoints/123"
     assert endpoint_location(ep) == "us"
 
 
@@ -107,3 +122,48 @@ def test_endpoint_location_reads_region_from_resource_name() -> None:
 
 def test_endpoint_location_returns_none_for_bare_id() -> None:
     assert endpoint_location("4327537029437980672") is None
+
+
+# --- client factories: transport policy ----------------------------------------
+# The SDK does not retry by default (HttpOptions.retry_options is None ->
+# stop_after_attempt(1)), so these assert the policy is actually attached.
+
+
+def test_genai_client_attaches_retry_and_timeout(captured_client: MagicMock) -> None:
+    cfg = TuningConfig(project="p", location="us-central1", bucket="gs://b")
+    genai_client(cfg)
+    opts = captured_client.call_args.kwargs["http_options"]
+    assert opts.retry_options.attempts == 5
+    assert opts.retry_options.http_status_codes == _RETRYABLE_STATUS_CODES
+    assert opts.timeout == 120_000
+
+
+def test_genai_client_retry_backoff_is_exponential_with_jitter(
+    captured_client: MagicMock,
+) -> None:
+    cfg = TuningConfig(project="p", location="us-central1", bucket="gs://b")
+    genai_client(cfg)
+    retry = captured_client.call_args.kwargs["http_options"].retry_options
+    assert retry.exp_base > 1  # actually backs off rather than retrying flat
+    assert retry.initial_delay < retry.max_delay
+    assert retry.jitter  # avoids synchronized retries across a sweep
+
+
+def test_genai_client_for_endpoint_attaches_the_same_policy(
+    captured_client: MagicMock,
+) -> None:
+    cfg = TuningConfig(project="p", location="us-central1", bucket="gs://b")
+    genai_client_for_endpoint(cfg, "projects/p/locations/us/endpoints/1")
+    opts = captured_client.call_args.kwargs["http_options"]
+    assert opts.retry_options.attempts == 5
+    assert opts.timeout == 120_000
+
+
+def test_genai_client_still_routes_location_and_project(captured_client: MagicMock) -> None:
+    # The transport policy must not disturb the existing routing behaviour.
+    cfg = TuningConfig(project="proj-x", location="europe-west4", bucket="gs://b")
+    genai_client(cfg, base_model="gemini-3.5-flash")
+    kwargs = captured_client.call_args.kwargs
+    assert kwargs["project"] == "proj-x"
+    assert kwargs["location"] == "global"  # Gemini 3.x inference
+    assert kwargs["vertexai"] is True

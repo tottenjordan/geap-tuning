@@ -16,11 +16,37 @@ from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 
 _PROJECT_KEYS = ("PROJECT_ID", "GOOGLE_CLOUD_PROJECT")
 _LOCATION_KEYS = ("GOOGLE_CLOUD_LOCATION", "GCP_REGION")
 _BUCKET_KEYS = ("GCS_BUCKET_NAME", "BUCKET", "GOOGLE_CLOUD_STORAGE_BUCKET")
 _DEFAULT_LOCATION = "us-central1"
+
+# The Gen AI SDK does NOT retry by default: ``HttpOptions.retry_options`` is
+# ``None``, which the SDK resolves to ``stop_after_attempt(1)`` — i.e. never.
+# That is a poor fit here: ``wait_for_tuning_job`` polls for 30-60 minutes and the
+# eval loops make hundreds of ``generate_content`` calls, so a single transient
+# 429/503 would discard an already-paid run. Setting this once on the client
+# covers every SDK call the repo makes — polling, tuning and inference alike.
+_RETRY_OPTIONS = types.HttpRetryOptions(
+    attempts=5,
+    initial_delay=1.0,
+    max_delay=60.0,
+    exp_base=2.0,
+    jitter=1.0,
+    http_status_codes=[429, 500, 502, 503, 504],
+)
+
+# Without this httpx receives ``timeout=None``, which means *no* timeout — a
+# half-open connection would hang a poll forever with no output.
+_REQUEST_TIMEOUT_MS = 120_000
+
+
+def _http_options() -> types.HttpOptions:
+    """Return the shared transport policy (retry + timeout) for every client."""
+    return types.HttpOptions(timeout=_REQUEST_TIMEOUT_MS, retry_options=_RETRY_OPTIONS)
+
 
 # A single resource label, sourced from one key/value env pair. Kept as a
 # {key: value} map (not a scalar pair) so it drops straight into the SDK
@@ -125,8 +151,8 @@ def resolve_location(cfg: TuningConfig, base_model: str | None = None) -> str:
 def genai_client(cfg: TuningConfig | None = None, *, base_model: str | None = None) -> genai.Client:
     """Build a Gen AI SDK client wired to the Vertex/GEAP backend.
 
-    Thin factory over ``genai.Client(vertexai=True, ...)``; not unit-tested
-    because it only forwards resolved config to the SDK. Pass ``base_model`` to
+    Thin factory over ``genai.Client(vertexai=True, ...)``, which also attaches
+    the shared retry/timeout policy (see :func:`_http_options`). Pass ``base_model`` to
     route an **inference** client for a Gemini 3.x model to the ``global`` endpoint
     (see :func:`resolve_location`) — the client's location is fixed at
     construction. Leave ``base_model`` unset for **tuning** clients: tuning is not
@@ -134,7 +160,12 @@ def genai_client(cfg: TuningConfig | None = None, *, base_model: str | None = No
     """
     cfg = cfg or load_config()
     location = resolve_location(cfg, base_model)
-    return genai.Client(vertexai=True, project=cfg.project, location=location)
+    return genai.Client(
+        vertexai=True,
+        project=cfg.project,
+        location=location,
+        http_options=_http_options(),
+    )
 
 
 def endpoint_location(endpoint: str) -> str | None:
@@ -161,4 +192,9 @@ def genai_client_for_endpoint(cfg: TuningConfig, endpoint: str) -> genai.Client:
     endpoint, which lives in the ``us``/``eu`` multi-region.
     """
     location = endpoint_location(endpoint) or cfg.location
-    return genai.Client(vertexai=True, project=cfg.project, location=location)
+    return genai.Client(
+        vertexai=True,
+        project=cfg.project,
+        location=location,
+        http_options=_http_options(),
+    )
