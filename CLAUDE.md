@@ -36,7 +36,7 @@ Checkpoints and continuous tuning are cross-cutting sub-features of these servic
 Examples generally follow one of two client styles. Keep each example on one path so it reads cleanly:
 
 1. **Google Gen AI SDK** — `from google import genai`; `client.tunings.tune/get/list(...)` (the launch method is `tune`, not `create`). Routes to Vertex when constructed with `vertexai=True` (or `GOOGLE_GENAI_USE_VERTEXAI=true`). This is the newer, preferred surface and the one this repo uses.
-2. **Agent Platform / Vertex SDK for Python** — `import vertexai` + `from vertexai.tuning import sft`; `sft.SupervisedTuningJob(...)`. Older but appears throughout Google's tuning docs.
+2. **Agent Platform / Vertex SDK for Python** — `import vertexai` + `from vertexai.tuning import sft`; `sft.SupervisedTuningJob(...)`. Older but appears throughout Google's tuning docs. Note the namespace is being split up: **`vertexai.Client` is deprecated** in favour of `agentplatform.Client` (vendored inside `google-cloud-aiplatform`), though `vertexai.init`/`vertexai.tuning.sft` shown here are not. `agentplatform.Client` has **no `tunings` surface**, so it is not a migration target for tuning; `tests/test_sdk_surfaces.py` just guards that `vertexai.Client` never appears here. See [docs/notes/geap-tuning-overview.md](docs/notes/geap-tuning-overview.md).
 
 A tuning job's output is an **endpoint** (`tuning_job.tuned_model.endpoint`); you call `generate_content` against that endpoint, not a model name. For thinking models, disable thinking / set the minimum thinking budget when calling a tuned model — SFT trains the model to mimic ground truth without a thinking trace.
 

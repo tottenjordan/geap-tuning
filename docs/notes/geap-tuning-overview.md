@@ -58,4 +58,15 @@ GenerativeModel(job.tuned_model_endpoint_name).generate_content("...")
 sft.SupervisedTuningJob.list()  # returns objects, not name strings
 ```
 
+> **Namespace caveat (verified 2026-09-18 against aiplatform 2.1.3).**
+> `vertexai.Client` is **deprecated** in favour of `agentplatform.Client`
+> (shipped vendored inside `google-cloud-aiplatform` — not a separate PyPI
+> package). The `vertexai.init` and `vertexai.tuning.sft` calls above are **not**
+> deprecated and still work; only the `Client` class warns. Do not "migrate" the
+> snippet above to `agentplatform`: that client exposes `runtimes`, `evals`,
+> `sessions`, `rag` and friends but **no `tunings` and no `experiments`** surface,
+> so it cannot do what this path does. This repo uses neither — it is on the
+> `google.genai` path — and `tests/test_sdk_surfaces.py` enforces that
+> `vertexai.Client` never appears in `src/` or `examples/`.
+
 REST: `GET/POST {REGION}-aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{REGION}/tuningJobs`, auth `Bearer $(gcloud auth print-access-token)`.
