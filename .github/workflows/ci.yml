@@ -28,3 +28,20 @@ jobs:
       - run: uv sync --all-groups
       - run: make lint
       - run: make test
+      # Tripwire: fail if a dependency bump starts deprecating a surface we use.
+      # vertexai.Client is already deprecated in favour of agentplatform.Client
+      # (aiplatform 2.1.0); these are the surfaces this repo actually depends on.
+      # Kept as a CI step rather than a pytest test on purpose: as a test it would
+      # have to import the real aiplatform module (~4.3s), undoing the lazy import
+      # in experiments.py.
+      - name: No deprecation warnings on the SDK surfaces we use
+        run: |
+          uv run python -W error::FutureWarning -W error::DeprecationWarning -c "
+          from google.cloud import aiplatform
+          for n in ('init','start_run','log_params','log_metrics',
+                    'log_time_series_metrics','Experiment','Tensorboard'):
+              getattr(aiplatform, n)
+          from google import genai
+          genai.Client(vertexai=True, project='p', location='us-central1')
+          print('no deprecation warnings on the surfaces this repo uses')
+          "
