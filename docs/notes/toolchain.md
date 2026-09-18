@@ -17,4 +17,7 @@ How this project's Python toolchain is wired, and the non-obvious decisions behi
 
 ## Verified green
 
-`make lint` and `make test` both pass on 3.12.3 as of the setup date (1 smoke test, 100% coverage on the placeholder entry point).
+`make lint`, `make test` and `make build` all pass on CPython 3.12.3 (304 tests,
+98% coverage; sdist + wheel build with the `uv_build` backend). Re-verified
+2026-09-18 after upgrading every dependency to its latest compatible version —
+notably `google-cloud-aiplatform` 1.x → 2.x.

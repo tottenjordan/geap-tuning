@@ -1,8 +1,8 @@
 # Checkpointing & continuous tuning — verified SDK surface
 
 Durable reference for GEAP's two cross-cutting tuning sub-features, as
-implemented in this repo. Verified against `google-genai` **2.14.0** on
-2026-07-28. Re-verify SDK symbols before acting — this surface moves. See
+implemented in this repo. Verified against `google-genai` **2.24.0** on
+2026-09-18. Re-verify SDK symbols before acting — this surface moves. See
 [[tuning-apis]] for the per-service call shapes and [[geap-tuning-overview]] for
 the method matrix.
 

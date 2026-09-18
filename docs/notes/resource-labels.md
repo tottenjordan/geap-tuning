@@ -7,8 +7,8 @@ from two `.env` vars — `LABEL_KEY` / `LABEL_VALUE` (defaults `project` /
 empty when either var is unset) by `config.load_config`. Examples pass
 `labels=cfg.labels` at each creation site.
 
-Verified 2026-07-30 against `google-genai` 2.14.0, `google-cloud-aiplatform`
-1.162.0.
+Verified 2026-09-18 against `google-genai` 2.24.0, `google-cloud-aiplatform`
+2.1.3.
 
 ## What actually accepts labels (installed SDK versions)
 

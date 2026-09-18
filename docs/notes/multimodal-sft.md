@@ -79,7 +79,7 @@ name), evaluates each on **val** with `run_image_eval`, picks the winner with
 
 Attaching an `evaluation_config` (the managed [Evaluation service](tuning-apis.md))
 to a multimodal SFT job **fails the job at training time** — verified 2026-07-29,
-google-genai 2.14.0 / GEAP `us-central1`. The job launches, stages fine, then the
+google-genai 2.24.0 / GEAP `us-central1`. The job launches, stages fine, then the
 tuning service errors:
 
 > `code=3 (INVALID_ARGUMENT)` — *"Failed to convert GeminiTuneExamples to

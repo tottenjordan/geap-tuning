@@ -217,7 +217,7 @@ def launch_rlft_job(  # noqa: PLR0913 - explicit tuning hyperparameters, all key
     passing the SFT model's resource name as ``base_model``.
     ``evaluate_interval`` sets the step cadence for ``evaluation_config`` eval
     runs and ``checkpoint_interval`` sets how many steps elapse between exported
-    checkpoints — **both are reinforcement-tuning only** in google-genai 2.14.0
+    checkpoints — **both are reinforcement-tuning only** in google-genai 2.24.0
     (the SDK serializes them under ``reinforcementTuningSpec``, so the SFT/DPO
     launchers deliberately omit ``evaluate_interval``). See
     ``docs/notes/checkpoints-and-continuous-tuning.md``.

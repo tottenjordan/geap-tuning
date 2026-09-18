@@ -100,7 +100,7 @@ def test_launch_sft_job_labels_default_none() -> None:
 
 
 def test_launch_sft_job_rejects_evaluate_interval() -> None:
-    # evaluate_interval is RLFT-only in google-genai 2.14.0: the SDK serializes it
+    # evaluate_interval is RLFT-only in google-genai 2.24.0: the SDK serializes it
     # under reinforcementTuningSpec, so an SFT job carrying it 400s at the API.
     # The launcher deliberately omits the param, so passing it is a TypeError.
     client = MagicMock()

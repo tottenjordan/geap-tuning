@@ -92,7 +92,7 @@ DISTILLATION, but the SDK is case-insensitive; confirmed by the SDK's own
 `tests/tunings/test_tune.py`). `reward_config` (and `composite_reward_config`,
 `samples_per_prompt`, `thinking_level`, `evaluate_interval`, `checkpoint_interval`,
 `max_output_tokens`, `batch_size`) are fields on `types.CreateTuningJobConfig`
-(verified against the installed `google-genai` 2.14.0, not assumed).
+(verified against the installed `google-genai` 2.24.0, not assumed).
 
 Record shape — `contents` ends on a **user** turn; ground truth lives in
 `references` (a string→string dict), and there is **no** completion:
@@ -181,7 +181,7 @@ base-model cutoff, Gen AI SDK only) in
 ## Managed evaluation (cross-cutting, implemented)
 
 Reached **only via `CreateTuningJobConfig.evaluation_config`** — there is no
-standalone `client.evals` in google-genai 2.14.0. GEAP evaluates each checkpoint
+standalone `client.evals` in google-genai 2.24.0. GEAP evaluates each checkpoint
 and writes results to GCS. Builders in `autoeval.py`; demoed by
 `examples/run_advanced_eval.py` / `07_advanced_eval`.
 
@@ -217,7 +217,7 @@ different questions and are used together — see the comparison in
 - **`inference_generation_config`** — a `types.GenerationConfig` controlling how
   the *tuned model* generates the responses being scored (e.g. `temperature=0.0`).
 - **`evaluate_interval`** (`CreateTuningJobConfig`, int) — step cadence for eval
-  runs. **RLFT-only in google-genai 2.14.0** (threaded through `launch_rlft_job`
+  runs. **RLFT-only in google-genai 2.24.0** (threaded through `launch_rlft_job`
   only): the SDK's `_CreateTuningJobConfig_to_vertex` serializes it
   *unconditionally* under `reinforcementTuningSpec.hyperParameters.evaluateInterval`
   (`tunings.py` line ~804, **not** inside the per-`method` branch that guards

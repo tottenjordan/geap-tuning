@@ -90,7 +90,7 @@ def test_launch_preference_job_labels_default_none() -> None:
 
 
 def test_launch_preference_job_rejects_evaluate_interval() -> None:
-    # evaluate_interval is RLFT-only in google-genai 2.14.0 (serialized under
+    # evaluate_interval is RLFT-only in google-genai 2.24.0 (serialized under
     # reinforcementTuningSpec); the DPO launcher omits it, so passing it errors.
     client = MagicMock()
     with pytest.raises(TypeError):

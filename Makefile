@@ -11,3 +11,6 @@ format:
 
 test:
 	uv run pytest
+
+build:
+	uv build
