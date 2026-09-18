@@ -250,6 +250,39 @@ Tests never render — they monkeypatch the import shims with a `MagicMock` and 
 the shaped data reaches `ax.bar` / `ax.plot`, plus that the shims raise on
 `ImportError`.
 
+## Report charts: PaperBanana for diagrams, a renderer for data
+
+The repo produces **two** kinds of figures, and they want different tools:
+
+- **Conceptual diagrams** (`docs/imgs/reference-architecture.png` etc.) — generated
+  with the **PaperBanana MCP tool**, as CLAUDE.md says. Nothing here changes that.
+- **Data charts** in the `docs/doe/*/` reports — render them **deterministically**
+  with matplotlib, not with an image model.
+
+**Why (learned the hard way, 2026-09-18).** The RLFT constrained-generation chart was
+first PaperBanana-generated and shipped with its legend drawn over the `1.000` value
+labels. Three `generate_plot` attempts to fix it each satisfied the stated constraint
+and broke something else: (1) legend moved correctly, but the annotation became a wide
+panel across the Forbidden and Sentence Count bars; (2) annotation fixed, but the
+"Sentence Count" and "Full Satisfaction Rate" axis labels ran together; (3) a blank
+white image. Image models **re-render the whole figure each pass** rather than editing
+it, so layout constraints do not converge — the same failure the paperbanana-figures
+skill documents for diagram arrow geometry, and it applies to plot furniture too. Two
+aggravating factors:
+
+- **`continue_plot` was not available.** It needs a `run_id`, and the MCP server
+  exposed no run directory on this machine, so every fix was a full regeneration with
+  no memory of the previous one.
+- **Numbers are at risk.** An image model retypesets every value label; each pass is a
+  fresh chance to misrender a digit in a figure whose whole purpose is reporting
+  measured results. A renderer cannot get them wrong.
+
+`examples/render_rlft_constrained_chart.py` is the worked example: offline, no GCP, no
+tuning cost, lazy-imports the `viz` group, and reproduces the committed PNG
+**byte-for-byte**. It also encodes the repo's image convention — downscale to 1800px
+wide, quantize to a 256-color palette — so a regenerated chart matches its siblings.
+Copy it for the next report chart rather than re-deriving the styling.
+
 ## Where each plottable metric comes from (design crux)
 
 | Source | Granularity | Fetch | Feeds |
