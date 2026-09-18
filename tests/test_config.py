@@ -111,7 +111,7 @@ def test_resolve_location_keeps_region_for_older_models() -> None:
 
 def test_endpoint_location_reads_multi_region_from_resource_name() -> None:
     # Tuned Gemini 3.x endpoints land on the us/eu multi-region, not the region.
-    ep = "projects/934903580331/locations/us/endpoints/4327537029437980672"
+    ep = "projects/p/locations/us/endpoints/123"
     assert endpoint_location(ep) == "us"
 
 
