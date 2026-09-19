@@ -141,4 +141,9 @@ done
 
 echo
 echo "Done. Deleted ${DELETED}, failed ${FAILED}."
-echo "Tuning JOBS are not deletable (only cancellable) — see docs/notes/endpoints-and-cost.md."
+echo
+echo "HEADS UP: the tuning JOBS remain (tuningJobs exposes no delete), and each one"
+echo "still reports the endpoint you just deleted. So reuse-by-display-name will"
+echo "find the job, skip launching, and then 404 at inference. To re-run any of"
+echo "these examples, change its display name (for a sweep, sweep.name) so a fresh"
+echo "job is launched. See docs/notes/endpoints-and-cost.md."

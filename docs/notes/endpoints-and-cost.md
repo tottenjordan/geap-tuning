@@ -62,6 +62,16 @@ It undeploys each model before deleting its endpoint, which is the ordering the
 API requires. Deletion is irreversible: getting a checkpoint back means re-running
 its tuning job.
 
+> **After a cleanup, reuse-by-display-name yields a dangling endpoint.** Verified
+> 2026-09-19 after deleting 65 endpoints: the tuning **jobs** survive (they are not
+> deletable), `find_tuning_job_by_display_name` still matches them, and
+> `tuned_endpoint(job)` still returns the endpoint resource name — which no longer
+> exists. The example therefore skips launching and then **404s at inference**
+> rather than transparently re-tuning. There is no cheap fix: detecting it would
+> cost an endpoint-existence API call on every reuse. The remedy is to **change the
+> display name** (for a sweep, `sweep.name`) so a fresh job is launched. The
+> cleanup script prints this warning when it finishes.
+
 **Why you will need it.** Every job runs with `export_last_checkpoint_only=False`
 (the default, so `collect_checkpoint_curve` can score each checkpoint) and GEAP
 deploys **one endpoint per exported checkpoint**. An 8-epoch DOE grid point leaves
