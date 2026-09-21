@@ -122,8 +122,14 @@ def configure_logging(
     themselves defaulting to ``INFO`` and ``text``. Pass ``fmt="json"`` for
     one JSON object per line.
 
-    Logs go to **stderr** by default so a script's own ``print`` output on stdout
-    stays separately redirectable.
+    Logs go to **stdout** by default, deliberately. The conventional choice is
+    stderr, but this function is only ever called by an *application* — the
+    library's own default is no handler at all — and this repo's applications are
+    runnable examples whose log **is** their narrative output. With logs on stderr,
+    the natural ``python examples/run_sft.py > run.log`` captured the example's
+    prints but silently dropped the progress heartbeat, which is exactly the
+    failure the heartbeat exists to prevent. Pass ``stream=sys.stderr`` to restore
+    the conventional split.
     """
     logger = logging.getLogger(PACKAGE_LOGGER)
     resolved_level = level if level is not None else os.environ.get(LOG_LEVEL_ENV, "INFO")
@@ -132,7 +138,7 @@ def configure_logging(
     for existing in [h for h in logger.handlers if isinstance(h, _ManagedHandler)]:
         logger.removeHandler(existing)
 
-    handler = _ManagedHandler(stream if stream is not None else sys.stderr)
+    handler = _ManagedHandler(stream if stream is not None else sys.stdout)
     handler.setFormatter(
         JsonFormatter()
         if resolved_fmt == "json"

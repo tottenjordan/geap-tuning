@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import sys
 
 import pytest  # noqa: TC002 - fixture type used at runtime by pytest
 
@@ -119,3 +120,25 @@ def test_env_vars_supply_the_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     lines = [line for line in buffer.getvalue().strip().split("\n") if line]
     assert len(lines) == 1
     assert json.loads(lines[0])["k"] == "v"
+
+
+def test_default_stream_is_stdout(capsys: pytest.CaptureFixture[str]) -> None:
+    """A plain ``> run.log`` must capture the progress output.
+
+    Logs on stderr meant the natural stdout-only redirect dropped the heartbeat —
+    the very failure it exists to prevent. Applications get stdout by default;
+    ``stream=sys.stderr`` restores the conventional split.
+    """
+    configure_logging()
+    get_logger("geap_tuning.x").info("progress", extra={"run": "a"})
+    captured = capsys.readouterr()
+    assert "progress" in captured.out
+    assert "progress" not in captured.err
+
+
+def test_stream_can_be_overridden_to_stderr(capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging(stream=sys.stderr)
+    get_logger("geap_tuning.x").info("progress")
+    captured = capsys.readouterr()
+    assert "progress" in captured.err
+    assert "progress" not in captured.out

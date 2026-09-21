@@ -67,7 +67,9 @@ def _log_heartbeat(job_name: str, state: str, elapsed: float) -> None:
         "tuning job progress",
         extra={
             "job": job_name.rsplit("/", 1)[-1],
-            "state": str(state),
+            # ``.value`` not ``str()``: the SDK's JobState is an enum whose str() is
+            # "JobState.JOB_STATE_RUNNING". A structured field wants the bare value.
+            "state": getattr(state, "value", str(state)),
             "elapsed_min": round(elapsed / 60, 1),
         },
     )
