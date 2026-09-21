@@ -2,11 +2,13 @@
 
 import datetime
 import io
+import json
 import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from google.genai import types
 
 from geap_tuning.jobs import (
     cancel_tuning_job,
@@ -385,3 +387,20 @@ def test_heartbeat_reaches_a_redirected_stream_immediately() -> None:
     with patch("geap_tuning.jobs.time.sleep", lambda _: None):
         wait_for_tuning_job(client, "projects/p/locations/l/tuningJobs/1", poll_interval=0)
     assert "JOB_STATE_SUCCEEDED" in buffer.getvalue()
+
+
+def test_heartbeat_state_field_is_the_bare_enum_value() -> None:
+    """``str()`` on the SDK's JobState yields 'JobState.JOB_STATE_RUNNING'.
+
+    A structured field consumed by a log pipeline wants the bare value, so the
+    heartbeat reads ``.value`` rather than stringifying the enum.
+    """
+    buffer = io.StringIO()
+    configure_logging(fmt="json", stream=buffer)
+    client = MagicMock()
+    client.tunings.get.return_value = SimpleNamespace(
+        state=types.JobState.JOB_STATE_SUCCEEDED, name="n"
+    )
+    with patch("geap_tuning.jobs.time.sleep", lambda _: None):
+        wait_for_tuning_job(client, "jobs/1", poll_interval=0)
+    assert json.loads(buffer.getvalue().strip())["state"] == "JOB_STATE_SUCCEEDED"
