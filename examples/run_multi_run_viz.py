@@ -22,6 +22,7 @@ from pathlib import Path
 
 from geap_tuning.config import load_config
 from geap_tuning.experiments import experiment_dataframe, init_experiment
+from geap_tuning.logs import configure_logging
 from geap_tuning.viz import (
     dataframe_to_rows,
     drop_rows_missing_metrics,
@@ -44,6 +45,7 @@ def _arg(flag: str, default: str) -> str:
 
 def main() -> None:
     """Render charts from an already-tracked experiment (no tuning)."""
+    configure_logging()
     cfg = load_config()
     experiment = _arg("--experiment", DEFAULT_EXPERIMENT)
     out_dir = Path(_arg("--out", "."))

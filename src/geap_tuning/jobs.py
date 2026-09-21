@@ -17,8 +17,12 @@ from typing import TYPE_CHECKING, Any
 
 from google.genai import types
 
+from geap_tuning.logs import get_logger
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+_logger = get_logger(__name__)
 
 # Job lifecycle states (Gen AI SDK / GEAP tuningJobs).
 STATE_SUCCEEDED = "JOB_STATE_SUCCEEDED"
@@ -49,16 +53,23 @@ _EPOCH = datetime.datetime.fromtimestamp(0, tz=datetime.UTC)
 _HEARTBEAT_EVERY = 5
 
 
-def _print_heartbeat(job_name: str, state: str, elapsed: float) -> None:
-    """Print one timestamped ``state``/``elapsed`` line for a long-running job."""
-    stamp = time.strftime("%H:%M:%S")
-    short = job_name.rsplit("/", 1)[-1]
-    # flush: stdout is block-buffered when redirected (a log file, nohup, CI), so
-    # without this a heartbeat meant to show progress during a 30-60 minute wait
-    # stays invisible until the process exits - defeating the entire point.
-    print(
-        f"[{stamp}] tuning job {short}: {state} ({elapsed / 60:.1f} min elapsed)",
-        flush=True,
+def _log_heartbeat(job_name: str, state: str, elapsed: float) -> None:
+    """Emit one structured progress record for a long-running job.
+
+    Logging rather than ``print`` here also fixes the buffering trap this used to
+    need ``flush=True`` for: a ``StreamHandler`` flushes on every emit, so the
+    heartbeat shows up during the wait even when output is redirected to a file.
+    """
+    # The message stays terse and the specifics ride on the record, so text mode
+    # reads as `... tuning job progress job=8814 state=RUNNING elapsed_min=5.1`
+    # without repeating every value twice.
+    _logger.info(
+        "tuning job progress",
+        extra={
+            "job": job_name.rsplit("/", 1)[-1],
+            "state": str(state),
+            "elapsed_min": round(elapsed / 60, 1),
+        },
     )
 
 
@@ -108,9 +119,11 @@ def _fingerprint_allows_reuse(job: Any, expected: str) -> bool:  # noqa: ANN401 
     if not recorded:
         # Launched before fingerprints were recorded: unknowable, so allow reuse but
         # say so — silence here is exactly the failure mode this check exists for.
-        print(
-            f"note: reusing {getattr(job, 'name', '?')} which records no dataset "
-            f"fingerprint; if you have edited the data since, change the display name"
+        _logger.warning(
+            "reusing %s which records no dataset fingerprint; if the data changed "
+            "since, bump GEAP_RUN_SUFFIX to force a fresh job",
+            getattr(job, "name", "?"),
+            extra={"job": getattr(job, "name", "?"), "reason": "no-fingerprint-label"},
         )
         return True
     return recorded == expected
@@ -274,7 +287,7 @@ def wait_for_tuning_job(
         job = client.tunings.get(name=job_name)
         elapsed = time.monotonic() - started
         if heartbeat and (job.state != last_state or polls % _HEARTBEAT_EVERY == 0):
-            _print_heartbeat(job_name, job.state, elapsed)
+            _log_heartbeat(job_name, job.state, elapsed)
         last_state = job.state
         polls += 1
 

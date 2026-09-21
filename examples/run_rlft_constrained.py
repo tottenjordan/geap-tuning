@@ -41,6 +41,7 @@ from geap_tuning.jobs import (
     wait_for_tuning_job,
     with_data_fingerprint,
 )
+from geap_tuning.logs import configure_logging
 from geap_tuning.rlft import constraint_reward
 from geap_tuning.rlft.constrained import (
     CONSTRAINT_SPECS,
@@ -94,6 +95,7 @@ def _gate_ok(baseline: dict[str, object], *, force: bool) -> bool:
 
 def main() -> None:
     """Run the constrained-generation RLFT before→after against live GEAP."""
+    configure_logging()
     cfg = load_config()
     display_name = cfg.display_name(DISPLAY_NAME)
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning

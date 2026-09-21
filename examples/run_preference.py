@@ -26,6 +26,7 @@ from geap_tuning.jobs import (
     wait_for_tuning_job,
     with_data_fingerprint,
 )
+from geap_tuning.logs import configure_logging
 from geap_tuning.preference.data import (
     SUPPORT_REPLIES,
     build_preference_dataset,
@@ -50,6 +51,7 @@ _JUDGE_PROMPT = (
 
 def main() -> None:
     """Run the full DPO workflow against live GEAP."""
+    configure_logging()
     cfg = load_config()
     display_name = cfg.display_name(DISPLAY_NAME)
     client = genai_client(cfg)

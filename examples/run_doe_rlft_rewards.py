@@ -48,6 +48,7 @@ from geap_tuning.doe import SweepConfig, run_sweep
 from geap_tuning.experiments import experiment_dataframe, init_experiment
 from geap_tuning.gcs import upload_file
 from geap_tuning.inference import generate
+from geap_tuning.logs import configure_logging
 from geap_tuning.rlft.data import (
     MATH_PROBLEMS,
     build_rlft_dataset,
@@ -75,6 +76,7 @@ CONTENT_METRIC = "content_accuracy"  # marker-agnostic: right number anywhere in
 
 def main() -> None:
     """Run the reward-shape DOE against live GEAP and print a cross-shape table."""
+    configure_logging()
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
     plot = "--plot" in sys.argv

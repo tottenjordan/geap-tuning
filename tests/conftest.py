@@ -13,7 +13,16 @@ what most callers want. Tests that exercise the missing-field paths pass the
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
+
+import pytest
+
+from geap_tuning.logs import PACKAGE_LOGGER
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 def make_job(
@@ -44,3 +53,19 @@ def make_checkpoint(
         step=step,
         endpoint=endpoint,
     )
+
+
+@pytest.fixture(autouse=True)
+def _reset_package_logger() -> Iterator[None]:
+    """Undo any ``configure_logging`` a test performs.
+
+    ``configure_logging`` sets ``propagate = False`` on the package logger, which
+    would stop ``caplog`` seeing records in every test that ran afterwards.
+    Restoring the logger keeps tests order-independent.
+    """
+    logger = logging.getLogger(PACKAGE_LOGGER)
+    handlers, level, propagate = logger.handlers[:], logger.level, logger.propagate
+    yield
+    logger.handlers[:] = handlers
+    logger.setLevel(level)
+    logger.propagate = propagate

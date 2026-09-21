@@ -36,12 +36,15 @@ from geap_tuning.jobs import (
     wait_for_tuning_job,
     with_data_fingerprint,
 )
+from geap_tuning.logs import get_logger
 from geap_tuning.preference.tune import launch_preference_job
 from geap_tuning.rlft.tune import launch_rlft_job
 from geap_tuning.sft.tune import launch_sft_job
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+
+_logger = get_logger(__name__)
 
 _DEFAULT_METRICS = ("accuracy", "macro_f1")
 
@@ -284,7 +287,12 @@ def _dataset_fingerprint(
     try:
         return fingerprint_fn(train_uri)
     except Exception as exc:  # noqa: BLE001 - never block a sweep on a metadata read
-        print(f"note: could not fingerprint {train_uri} ({exc}); reuse falls back to URI only")
+        _logger.warning(
+            "could not fingerprint %s (%s); reuse falls back to URI only",
+            train_uri,
+            exc,
+            extra={"train_uri": train_uri, "error": str(exc)},
+        )
         return None
 
 
@@ -355,7 +363,10 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
     failures: list[tuple[str, Exception]] = []
 
     for index, spec in enumerate(specs, start=1):
-        print(f"[{index}/{len(specs)}] {spec.display_name}: starting", flush=True)
+        _logger.info(
+            "sweep run starting",
+            extra={"run": spec.display_name, "index": index, "total": len(specs)},
+        )
         try:
             existing = find_fn(
                 client,
@@ -365,9 +376,9 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
             )
             reused = existing is not None
             if reused:
-                print(
-                    f"[{index}/{len(specs)}] {spec.display_name}: reusing job {existing.name}",
-                    flush=True,
+                _logger.info(
+                    "sweep run reusing job",
+                    extra={"run": spec.display_name, "job": existing.name, "reused": True},
                 )
             job = existing if reused else launch(client, spec, train_uri, val_uri, run_labels)
             job = wait_fn(client, job.name)
@@ -377,19 +388,24 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
                 params = _scalar_params({"base_model": spec.base_model, **spec.params})
                 with track_run(spec.display_name, params=params):
                     log_summary_metrics(_numeric_metrics(metrics))
-        except Exception as exc:  # noqa: BLE001 - one bad grid point must not void the rest
+        except Exception as exc:  # logged via logger.exception, so BLE001 is satisfied
             # A sweep costs hours and money; losing three finished runs because the
             # fourth hit a transient error is the expensive failure mode.
-            print(
-                f"[{index}/{len(specs)}] {spec.display_name}: FAILED ({exc}); skipping",
-                flush=True,
+            _logger.exception(
+                "sweep run FAILED; skipping",
+                extra={"run": spec.display_name, "index": index, "total": len(specs)},
             )
             failures.append((spec.display_name, exc))
             continue
 
-        print(
-            f"[{index}/{len(specs)}] {spec.display_name}: done ({_numeric_metrics(metrics)})",
-            flush=True,
+        _logger.info(
+            "sweep run done",
+            extra={
+                "run": spec.display_name,
+                "index": index,
+                "total": len(specs),
+                **_numeric_metrics(metrics),
+            },
         )
         results.append(
             RunResult(
@@ -402,9 +418,13 @@ def run_sweep(  # noqa: PLR0913 - explicit injectable seams keep the driver test
         )
 
     if failures:
-        print(f"Sweep finished with {len(failures)}/{len(specs)} run(s) failed:")
-        for name, exc in failures:
-            print(f"  - {name}: {type(exc).__name__}: {exc}")
+        _logger.warning(
+            "sweep finished with %d/%d run(s) failed: %s",
+            len(failures),
+            len(specs),
+            ", ".join(f"{name} ({type(exc).__name__})" for name, exc in failures),
+            extra={"failed": len(failures), "total": len(specs)},
+        )
     if not results and failures:
         msg = f"Every run in sweep {sweep.name!r} failed ({len(failures)}/{len(specs)})"
         raise RuntimeError(msg)

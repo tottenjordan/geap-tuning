@@ -43,6 +43,7 @@ from geap_tuning.jobs import (
     wait_for_tuning_job,
     with_data_fingerprint,
 )
+from geap_tuning.logs import configure_logging
 from geap_tuning.rlft.data import (
     MATH_PROBLEMS,
     build_rlft_dataset,
@@ -81,6 +82,7 @@ def main(*, preflight_only: bool = False) -> None:
     ``validate_reward`` calls — no GCS upload, no tuning job, no cost — so you can
     smoke-test the new reward shapes against the live API before spending.
     """
+    configure_logging()
     cfg = load_config()
     display_name = cfg.display_name(DISPLAY_NAME)
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
