@@ -181,3 +181,35 @@ def test_resolve_location_still_routes_inference_to_global() -> None:
     # The config-level rejection must not break per-call inference routing.
     cfg = TuningConfig(project="p", location="us-central1", bucket="gs://b")
     assert resolve_location(cfg, "gemini-3.5-flash") == "global"
+
+
+# --- run suffix (re-runnable display names) --------------------------------------
+
+
+def _env(**extra: str) -> dict[str, str]:
+    return {"PROJECT_ID": "p", "BUCKET": "gs://b", **extra}
+
+
+def test_run_suffix_defaults_to_empty_and_leaves_names_unchanged() -> None:
+    cfg = load_config(_env())
+    assert cfg.run_suffix == ""
+    assert cfg.display_name("geap-sft-support-intent") == "geap-sft-support-intent"
+
+
+def test_run_suffix_is_appended_to_display_names() -> None:
+    cfg = load_config(_env(GEAP_RUN_SUFFIX="-v2"))
+    assert cfg.display_name("geap-sft-support-intent") == "geap-sft-support-intent-v2"
+
+
+@pytest.mark.parametrize("bad", ["_v2", "V2", "v2!", "a" * 33, "-v 2"])
+def test_run_suffix_rejects_names_that_are_not_resource_id_safe(bad: str) -> None:
+    # Vertex resource IDs are [a-z0-9-] only. Failing here beats a 400 from the API
+    # partway into a paid run.
+    with pytest.raises(ValueError, match="not resource-ID-safe"):
+        load_config(_env(GEAP_RUN_SUFFIX=bad))
+
+
+def test_run_suffix_accepts_plain_alphanumeric() -> None:
+    # A suffix need not start with '-'; "2026run" is legal too.
+    cfg = load_config(_env(GEAP_RUN_SUFFIX="2026run"))
+    assert cfg.display_name("geap-sft") == "geap-sft2026run"
