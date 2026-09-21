@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import re
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -336,7 +337,7 @@ def main() -> None:
     def run_one(sweep: SweepConfig) -> RunResult:
         return run_sweep(
             client,
-            sweep,
+            replace(sweep, name=cfg.display_name(sweep.name)),
             train_uri=train_uri,
             val_uri=val_uri,
             evaluate_fn=evaluate_fn,

@@ -82,6 +82,7 @@ def main(*, preflight_only: bool = False) -> None:
     smoke-test the new reward shapes against the live API before spending.
     """
     cfg = load_config()
+    display_name = cfg.display_name(DISPLAY_NAME)
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
     print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
 
@@ -143,14 +144,14 @@ def main(*, preflight_only: bool = False) -> None:
 
     # 6. Reuse an existing job if one exists; otherwise launch on the composite.
     job = find_tuning_job_by_display_name(
-        client, DISPLAY_NAME, train_uri=train_uri, data_fingerprint=data_fp
+        client, display_name, train_uri=train_uri, data_fingerprint=data_fp
     )
     if job is None:
         job = launch_rlft_job(
             client,
             train_uri=train_uri,
             val_uri=val_uri,
-            display_name=DISPLAY_NAME,
+            display_name=display_name,
             base_model=BASE_MODEL,
             composite_reward_config=composite,
             labels=with_data_fingerprint(cfg.labels, data_fp),
