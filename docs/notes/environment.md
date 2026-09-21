@@ -7,6 +7,7 @@ The `.env` file (present at repo root, git-ignored, **do not commit**) holds all
 - **GCP project:** `PROJECT_ID`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_PROJECT_NUMBER`, `GCP_REGION`, `GOOGLE_CLOUD_LOCATION`.
 - **API routing / auth:** `GOOGLE_GENAI_USE_VERTEXAI` (true → Vertex/GEAP path; false → AI Studio Developer API), `GOOGLE_API_KEY`, `GEMINI_API_KEY`.
 - **Cloud Storage:** `GCS_BUCKET_NAME`, `BUCKET`, `GOOGLE_CLOUD_STORAGE_BUCKET`.
+- **Run suffix:** `GEAP_RUN_SUFFIX` (optional, empty by default) — appended to every driver's tuning-job display name via `cfg.display_name()`. Examples reuse a job by display name, but a job outlives the endpoint it produced, so after reclaiming endpoint quota with `scripts/cleanup_endpoints.sh` the old name matches a job whose endpoint is gone. Bump this (`-v2`) to launch fresh jobs everywhere at once. Validated at config load against `[a-z0-9-]{1,32}`, since an illegal suffix would otherwise 400 partway into a paid run. See [endpoints & cost](endpoints-and-cost.md).
 - **Resource labels:** `LABEL_KEY`, `LABEL_VALUE` (defaults `project` / `geap-tuning`) — one key/value pair attached to every resource this repo creates (tuning jobs + their generated Model/Endpoint, and Managed TensorBoard). Both must be set for the label to apply; unset one and it's a no-op. See [resource labels](resource-labels.md).
 
 ## Gotchas (the reason this note exists)
