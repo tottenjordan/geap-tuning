@@ -1,8 +1,10 @@
 """Tests for tuning job monitoring and helpers."""
 
 import datetime
+import io
+import logging
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -19,6 +21,7 @@ from geap_tuning.jobs import (
     tuned_model_name,
     wait_for_tuning_job,
 )
+from geap_tuning.logs import configure_logging
 from tests.conftest import make_checkpoint, make_job
 
 
@@ -203,8 +206,8 @@ def test_wait_timeout_none_waits_indefinitely(monkeypatch: pytest.MonkeyPatch) -
     assert job.state == "JOB_STATE_SUCCEEDED"
 
 
-def test_wait_prints_a_heartbeat(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def test_wait_logs_a_heartbeat(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     client = MagicMock()
     client.tunings.get.side_effect = [
@@ -213,24 +216,29 @@ def test_wait_prints_a_heartbeat(
     ]
     monkeypatch.setattr("geap_tuning.jobs.time.sleep", lambda _: None)
 
-    wait_for_tuning_job(client, "projects/p/locations/l/tuningJobs/123", poll_interval=0)
+    with caplog.at_level(logging.INFO, logger="geap_tuning"):
+        wait_for_tuning_job(client, "projects/p/locations/l/tuningJobs/123", poll_interval=0)
 
-    out = capsys.readouterr().out
-    assert "123" in out  # short job id, not the full resource path
-    assert "JOB_STATE_RUNNING" in out
-    assert "JOB_STATE_SUCCEEDED" in out  # state change always prints
-    assert "elapsed" in out
+    # The message is terse; the specifics ride on the record as structured fields.
+    records = [r for r in caplog.records if hasattr(r, "state")]
+    assert records
+    assert {r.job for r in records} == {"123"}  # short job id, not the resource path
+    states = [r.state for r in records]
+    assert "JOB_STATE_RUNNING" in states
+    assert "JOB_STATE_SUCCEEDED" in states  # a state change always emits
+    assert all(hasattr(r, "elapsed_min") for r in records)
 
 
 def test_wait_heartbeat_can_be_silenced(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     client = MagicMock()
     client.tunings.get.return_value = SimpleNamespace(state="JOB_STATE_SUCCEEDED", name="n")
     monkeypatch.setattr("geap_tuning.jobs.time.sleep", lambda _: None)
 
-    wait_for_tuning_job(client, "n", poll_interval=0, heartbeat=False)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.INFO, logger="geap_tuning"):
+        wait_for_tuning_job(client, "n", poll_interval=0, heartbeat=False)
+    assert caplog.records == []
 
 
 def test_wait_surfaces_the_sdk_error_detail(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -339,42 +347,41 @@ def test_find_reuses_a_job_trained_on_the_same_bytes() -> None:
 
 
 def test_find_reuses_an_unfingerprinted_job_but_says_so(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     # Jobs launched before fingerprints were recorded cannot be compared; reuse is
     # allowed, but the ambiguity must be visible rather than silent.
     client = MagicMock()
     client.tunings.list.return_value = [_labelled(None, name="legacy")]
-    found = find_tuning_job_by_display_name(client, "d", data_fingerprint="aaaa1111")
+    with caplog.at_level(logging.WARNING, logger="geap_tuning"):
+        found = find_tuning_job_by_display_name(client, "d", data_fingerprint="aaaa1111")
     assert found.name == "legacy"
-    assert "no dataset fingerprint" in capsys.readouterr().out
+    assert "no dataset fingerprint" in caplog.text
+    assert caplog.records[0].levelname == "WARNING"  # it is a caveat, not routine info
 
 
 def test_find_ignores_fingerprints_when_none_requested(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     client = MagicMock()
     client.tunings.list.return_value = [_labelled("aaaa1111", name="any")]
-    assert find_tuning_job_by_display_name(client, "d").name == "any"
-    assert capsys.readouterr().out == ""  # no note when the check is not requested
+    with caplog.at_level(logging.WARNING, logger="geap_tuning"):
+        assert find_tuning_job_by_display_name(client, "d").name == "any"
+    assert caplog.records == []  # no note when the check is not requested
 
 
-def test_heartbeat_flushes_so_it_survives_redirection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """stdout is block-buffered when redirected to a file/CI log.
+def test_heartbeat_reaches_a_redirected_stream_immediately() -> None:
+    """The reason this used to need ``flush=True`` on a print.
 
-    Without flush the heartbeat only appears once the process exits, which defeats
-    its whole purpose of reporting progress *during* a 30-60 minute wait. Observed
-    on a live run piped to a log.
+    stdout is block-buffered when redirected, so a heartbeat meant to report
+    progress during a 30-60 minute wait stayed invisible until exit. A
+    ``StreamHandler`` flushes on every emit, so the record is readable straight
+    away — asserted here against an in-memory stream.
     """
-    calls: list[dict[str, object]] = []
-    monkeypatch.setattr("builtins.print", lambda *_a, **kwargs: calls.append(kwargs))
+    buffer = io.StringIO()
+    configure_logging(stream=buffer)
     client = MagicMock()
     client.tunings.get.return_value = SimpleNamespace(state="JOB_STATE_SUCCEEDED", name="n")
-    monkeypatch.setattr("geap_tuning.jobs.time.sleep", lambda _: None)
-
-    wait_for_tuning_job(client, "projects/p/locations/l/tuningJobs/1", poll_interval=0)
-
-    assert calls, "heartbeat printed nothing"
-    assert all(call.get("flush") is True for call in calls)
+    with patch("geap_tuning.jobs.time.sleep", lambda _: None):
+        wait_for_tuning_job(client, "projects/p/locations/l/tuningJobs/1", poll_interval=0)
+    assert "JOB_STATE_SUCCEEDED" in buffer.getvalue()

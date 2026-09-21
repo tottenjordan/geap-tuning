@@ -48,6 +48,7 @@ from geap_tuning.experiments import (
 )
 from geap_tuning.gcs import upload_file
 from geap_tuning.inference import generate
+from geap_tuning.logs import configure_logging
 from geap_tuning.sft.banking import (
     banking_labels,
     build_banking_dataset,
@@ -80,6 +81,7 @@ def _csv_dir_arg() -> str | None:
 
 def main() -> None:
     """Run the banking77 DOE against live GEAP and print a before/after comparison."""
+    configure_logging()
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only
     csv_dir = _csv_dir_arg()

@@ -36,6 +36,7 @@ from geap_tuning.doe import (
 from geap_tuning.experiments import experiment_dataframe, init_experiment
 from geap_tuning.gcs import upload_file
 from geap_tuning.inference import generate
+from geap_tuning.logs import configure_logging
 from geap_tuning.sft.data import SUPPORT_TICKETS, build_records, build_sft_dataset, split_dataset
 from geap_tuning.sft.evaluate import run_eval
 
@@ -54,6 +55,7 @@ SWEEP = SweepConfig(
 
 def main() -> None:
     """Run the DOE sweep against live GEAP and print a cross-run comparison."""
+    configure_logging()
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only
     plot = "--plot" in sys.argv

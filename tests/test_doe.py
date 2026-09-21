@@ -7,6 +7,7 @@ logging is monkeypatched (mirroring ``tests/test_experiments.py``) so nothing
 here touches live GCP.
 """
 
+import logging
 import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -502,7 +503,7 @@ def test_collect_checkpoint_curve_orders_by_epoch() -> None:
 
 
 @pytest.mark.usefixtures("no_tracking")
-def test_run_sweep_isolates_a_failing_run(capsys: pytest.CaptureFixture[str]) -> None:
+def test_run_sweep_isolates_a_failing_run(caplog: pytest.LogCaptureFixture) -> None:
     # A sweep costs hours; one bad grid point must not discard the finished ones.
     client = MagicMock()
 
@@ -513,6 +514,7 @@ def test_run_sweep_isolates_a_failing_run(capsys: pytest.CaptureFixture[str]) ->
         return {"accuracy": 0.9}
 
     states = iter(["ok", "boom", "ok"])
+    caplog.set_level(logging.INFO, logger="geap_tuning")
     results = run_sweep(
         client,
         SweepConfig(name="s", grid={"epochs": [1, 2, 3]}),
@@ -525,9 +527,11 @@ def test_run_sweep_isolates_a_failing_run(capsys: pytest.CaptureFixture[str]) ->
     )
 
     assert len(results) == 2  # the two healthy points survive
-    out = capsys.readouterr().out
-    assert "FAILED" in out
-    assert "1/3 run(s) failed" in out
+    assert "FAILED" in caplog.text
+    assert "1/3 run(s) failed" in caplog.text
+    failed = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert failed
+    assert failed[0].run.endswith("epochs2")  # structured, not just text
 
 
 @pytest.mark.usefixtures("no_tracking")
@@ -552,9 +556,10 @@ def test_run_sweep_raises_when_every_run_fails() -> None:
 
 
 @pytest.mark.usefixtures("no_tracking")
-def test_run_sweep_prints_progress(capsys: pytest.CaptureFixture[str]) -> None:
+def test_run_sweep_logs_progress(caplog: pytest.LogCaptureFixture) -> None:
     # Without this a sweep is silent for hours.
     client = MagicMock()
+    caplog.set_level(logging.INFO, logger="geap_tuning")
     run_sweep(
         client,
         SweepConfig(name="s", grid={"epochs": [1, 2]}),
@@ -565,10 +570,11 @@ def test_run_sweep_prints_progress(capsys: pytest.CaptureFixture[str]) -> None:
         find_fn=lambda _c, _dn, **_k: None,
         fingerprint_fn=lambda _uri: "fp-test",
     )
-    out = capsys.readouterr().out
-    assert "[1/2]" in out
-    assert "[2/2]" in out
-    assert "done" in out
+    assert "sweep run starting" in caplog.text
+    assert "sweep run done" in caplog.text
+    # index/total ride on the record so a log pipeline can chart progress
+    assert {r.index for r in caplog.records if hasattr(r, "index")} == {1, 2}
+    assert {r.total for r in caplog.records if hasattr(r, "total")} == {2}
 
 
 @pytest.mark.usefixtures("no_tracking")
@@ -620,7 +626,7 @@ def test_run_sweep_gates_reuse_on_the_dataset_fingerprint() -> None:
 
 @pytest.mark.usefixtures("no_tracking")
 def test_run_sweep_survives_an_unreachable_fingerprint(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     # Fingerprinting is a correctness improvement, not a precondition: a metadata
     # read failure must not stop a sweep before a single job is launched.
@@ -630,15 +636,16 @@ def test_run_sweep_survives_an_unreachable_fingerprint(
         msg = "403 forbidden"
         raise RuntimeError(msg)
 
-    results = run_sweep(
-        client,
-        SweepConfig(name="s", grid={"epochs": [1]}),
-        train_uri="gs://b/train.jsonl",
-        evaluate_fn=lambda _ep: {"accuracy": 0.5},
-        launch_fn=MagicMock(return_value=make_job()),
-        wait_fn=lambda _c, _n: make_job(),
-        find_fn=lambda _c, _dn, **_k: None,
-        fingerprint_fn=boom,
-    )
+    with caplog.at_level(logging.WARNING, logger="geap_tuning"):
+        results = run_sweep(
+            client,
+            SweepConfig(name="s", grid={"epochs": [1]}),
+            train_uri="gs://b/train.jsonl",
+            evaluate_fn=lambda _ep: {"accuracy": 0.5},
+            launch_fn=MagicMock(return_value=make_job()),
+            wait_fn=lambda _c, _n: make_job(),
+            find_fn=lambda _c, _dn, **_k: None,
+            fingerprint_fn=boom,
+        )
     assert len(results) == 1
-    assert "could not fingerprint" in capsys.readouterr().out
+    assert "could not fingerprint" in caplog.text

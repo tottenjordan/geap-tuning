@@ -64,6 +64,7 @@ from geap_tuning.doe import RunResult, SweepConfig, run_sweep
 from geap_tuning.experiments import experiment_dataframe, init_experiment
 from geap_tuning.gcs import upload_file
 from geap_tuning.inference import generate
+from geap_tuning.logs import configure_logging
 from geap_tuning.rlft.bench import (
     HARD_MATH_PROBLEMS,
     NEUTRAL_SYSTEM_INSTRUCTION,
@@ -259,6 +260,7 @@ def _run_shapes(
 
 def main() -> None:
     """Run the rank-capable reward-shape DOE against live GEAP and print tables."""
+    configure_logging()
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
     plot = "--plot" in sys.argv

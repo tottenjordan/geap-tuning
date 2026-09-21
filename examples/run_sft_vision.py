@@ -43,6 +43,7 @@ from geap_tuning.jobs import (
     tuned_endpoint,
     wait_for_tuning_job,
 )
+from geap_tuning.logs import configure_logging
 from geap_tuning.sft.tune import launch_sft_job
 from geap_tuning.sft_vision.data import (
     PROMPT,
@@ -173,6 +174,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    configure_logging()
     cfg = load_config()
     client = genai_client(cfg)
     print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")

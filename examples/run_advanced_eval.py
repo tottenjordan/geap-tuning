@@ -54,6 +54,7 @@ from geap_tuning.jobs import (
     wait_for_tuning_job,
     with_data_fingerprint,
 )
+from geap_tuning.logs import configure_logging
 from geap_tuning.sft.data import build_sft_dataset
 from geap_tuning.sft.tune import launch_sft_job
 
@@ -89,6 +90,7 @@ def build_advanced_eval_config(bucket: str) -> types.EvaluationConfig:
 
 def main() -> None:
     """Launch (or reuse) an SFT job with a comprehensive managed-eval config."""
+    configure_logging()
     cfg = load_config()
     display_name = cfg.display_name(DISPLAY_NAME)
     client = genai_client(cfg)

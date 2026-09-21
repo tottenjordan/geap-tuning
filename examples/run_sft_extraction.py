@@ -32,6 +32,7 @@ from geap_tuning.jobs import (
     wait_for_tuning_job,
     with_data_fingerprint,
 )
+from geap_tuning.logs import configure_logging
 from geap_tuning.sft.extraction import (
     EXTRACTION_EXAMPLES,
     SYSTEM_INSTRUCTION,
@@ -86,6 +87,7 @@ def _gate_ok(base: dict[str, object], *, force: bool) -> bool:
 
 def main() -> None:
     """Run the full generative-SFT workflow with a pilot gate and before → after."""
+    configure_logging()
     cfg = load_config()
     display_name = cfg.display_name(DISPLAY_NAME)
     client = genai_client(cfg)

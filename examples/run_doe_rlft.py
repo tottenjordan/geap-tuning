@@ -47,6 +47,7 @@ from geap_tuning.doe import (
 from geap_tuning.experiments import experiment_dataframe, init_experiment
 from geap_tuning.gcs import upload_file
 from geap_tuning.inference import generate
+from geap_tuning.logs import configure_logging
 from geap_tuning.rlft.data import (
     MATH_PROBLEMS,
     build_rlft_dataset,
@@ -77,6 +78,7 @@ SWEEP = SweepConfig(
 
 def main() -> None:
     """Run the RLFT DOE sweep against live GEAP and print a cross-run comparison."""
+    configure_logging()
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
     plot = "--plot" in sys.argv

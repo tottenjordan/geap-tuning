@@ -40,6 +40,7 @@ from geap_tuning.jobs import (
     tuned_model_name,
     wait_for_tuning_job,
 )
+from geap_tuning.logs import configure_logging
 from geap_tuning.rlft.data import (
     MATH_PROBLEMS,
     build_math_sft_dataset,
@@ -68,6 +69,7 @@ def _accuracy(client: object, endpoint: str) -> dict[str, object]:
 
 def main() -> None:
     """Run the SFT -> RLFT continuous-tuning workflow against live GEAP."""
+    configure_logging()
     cfg = load_config()
     client = genai_client(cfg)  # tuning is regional-only; both stages share it
     print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
