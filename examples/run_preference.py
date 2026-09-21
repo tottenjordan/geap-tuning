@@ -51,6 +51,7 @@ _JUDGE_PROMPT = (
 def main() -> None:
     """Run the full DPO workflow against live GEAP."""
     cfg = load_config()
+    display_name = cfg.display_name(DISPLAY_NAME)
     client = genai_client(cfg)
     print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
 
@@ -66,14 +67,14 @@ def main() -> None:
 
     # 3. Reuse an existing job if one exists; otherwise launch.
     job = find_tuning_job_by_display_name(
-        client, DISPLAY_NAME, train_uri=train_uri, data_fingerprint=data_fp
+        client, display_name, train_uri=train_uri, data_fingerprint=data_fp
     )
     if job is None:
         job = launch_preference_job(
             client,
             train_uri=train_uri,
             val_uri=val_uri,
-            display_name=DISPLAY_NAME,
+            display_name=display_name,
             labels=with_data_fingerprint(cfg.labels, data_fp),
         )
         print(f"Launched tuning job: {job.name}")

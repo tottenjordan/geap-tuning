@@ -40,6 +40,7 @@ separate ``global``-routed inference client (``genai_client(cfg, base_model=...)
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from geap_tuning.config import genai_client, genai_client_for_endpoint, load_config
@@ -176,7 +177,7 @@ def main() -> None:
     for label, sweep in shapes:
         result = run_sweep(
             client,
-            sweep,
+            replace(sweep, name=cfg.display_name(sweep.name)),
             train_uri=train_uri,
             val_uri=val_uri,
             evaluate_fn=evaluate_fn,

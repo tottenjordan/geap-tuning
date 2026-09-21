@@ -52,6 +52,7 @@ BASE_MODEL = "gemini-3.5-flash"
 def main() -> None:
     """Run the full RLFT workflow against live GEAP."""
     cfg = load_config()
+    display_name = cfg.display_name(DISPLAY_NAME)
     client = genai_client(cfg)  # tuning is regional-only; global excludes tuning
     print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
 
@@ -80,14 +81,14 @@ def main() -> None:
 
     # 4. Reuse an existing job if one exists; otherwise launch.
     job = find_tuning_job_by_display_name(
-        client, DISPLAY_NAME, train_uri=train_uri, data_fingerprint=data_fp
+        client, display_name, train_uri=train_uri, data_fingerprint=data_fp
     )
     if job is None:
         job = launch_rlft_job(
             client,
             train_uri=train_uri,
             val_uri=val_uri,
-            display_name=DISPLAY_NAME,
+            display_name=display_name,
             base_model=BASE_MODEL,
             labels=with_data_fingerprint(cfg.labels, data_fp),
         )

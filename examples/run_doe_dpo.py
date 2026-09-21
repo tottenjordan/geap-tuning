@@ -26,6 +26,7 @@ is regional too — keep them aligned.
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from geap_tuning.config import genai_client, load_config
@@ -106,7 +107,7 @@ def main() -> None:
     # 4. Run every grid point (reuse-or-launch), scoring + logging each run.
     results = run_sweep(
         client,
-        SWEEP,
+        replace(SWEEP, name=cfg.display_name(SWEEP.name)),
         train_uri=train_uri,
         val_uri=val_uri,
         evaluate_fn=evaluate_fn,

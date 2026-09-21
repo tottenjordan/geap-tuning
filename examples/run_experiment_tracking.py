@@ -64,6 +64,7 @@ EPOCHS = 3  # a few epochs → a few checkpoints → a few runs to compare
 def main() -> None:
     """Run the full experiment-tracking workflow against live GEAP."""
     cfg = load_config()
+    display_name = cfg.display_name(DISPLAY_NAME)
     client = genai_client(cfg)  # tuning is regional-only
     use_tb = "--tensorboard" in sys.argv
     print(f"Project={cfg.project} location={cfg.location} bucket={cfg.bucket} labels={cfg.labels}")
@@ -81,14 +82,14 @@ def main() -> None:
 
     # 2. Reuse or launch a single SFT job that exports intermediate checkpoints.
     job = find_tuning_job_by_display_name(
-        client, DISPLAY_NAME, train_uri=train_uri, data_fingerprint=data_fp
+        client, display_name, train_uri=train_uri, data_fingerprint=data_fp
     )
     if job is None:
         job = launch_sft_job(
             client,
             train_uri=train_uri,
             val_uri=val_uri,
-            display_name=DISPLAY_NAME,
+            display_name=display_name,
             base_model=BASE_MODEL,
             epochs=EPOCHS,
             adapter_size=ADAPTER_SIZE,
@@ -138,12 +139,12 @@ def main() -> None:
             "epoch": cp.epoch,
             "step": cp.step,
         }
-        with track_run(f"{DISPLAY_NAME}-cp-{cp.checkpoint_id}", params=params):
+        with track_run(f"{display_name}-cp-{cp.checkpoint_id}", params=params):
             log_summary_metrics({"accuracy": metrics["accuracy"], "macro_f1": metrics["macro_f1"]})
 
     # 6. With TensorBoard, also log the accuracy-vs-epoch curve as one time-series run.
     if use_tb:
-        with track_run(f"{DISPLAY_NAME}-curve"):
+        with track_run(f"{display_name}-curve"):
             for cp, metrics in sorted(results, key=lambda r: r[0].epoch):
                 log_timeseries_metrics(
                     {"accuracy": metrics["accuracy"], "macro_f1": metrics["macro_f1"]},

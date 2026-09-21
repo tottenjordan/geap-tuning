@@ -54,6 +54,15 @@ def _http_options() -> types.HttpOptions:
 _LABEL_KEY_ENV = "LABEL_KEY"
 _LABEL_VALUE_ENV = "LABEL_VALUE"
 
+# Optional suffix appended to every example's display name. Tuning jobs are reused
+# by display name and a job outlives the endpoint it produced, so reclaiming
+# endpoint quota leaves every job still matching but pointing at a deleted
+# endpoint. Bumping this gives every driver a fresh name in one move.
+_RUN_SUFFIX_ENV = "GEAP_RUN_SUFFIX"
+# Vertex resource IDs are [a-z0-9-] only; keep the suffix short so the combined
+# display name stays well inside the 128-char limit.
+_RUN_SUFFIX_RE = re.compile(r"[a-z0-9-]{1,32}")
+
 # Gemini 3.x models serve *inference* only from the ``global`` endpoint. NOTE:
 # tuning is NOT available on ``global`` (see ``requires_global_endpoint``), so this
 # applies to inference clients only — tuning jobs stay regional.
@@ -75,6 +84,19 @@ class TuningConfig:
     location: str
     bucket: str  # normalized to a gs:// URI
     labels: dict[str, str] = field(default_factory=dict)  # env-driven; empty when unset
+    run_suffix: str = ""  # from GEAP_RUN_SUFFIX; empty means names are unchanged
+
+    def display_name(self, base: str) -> str:
+        """Return ``base`` with the configured run suffix appended.
+
+        Examples reuse a tuning job by display name, but a job **outlives the
+        endpoint it produced** — reclaiming endpoint quota (see
+        ``scripts/cleanup_endpoints.sh``) leaves every job still matching by name
+        while pointing at a deleted endpoint, so the example skips launching and
+        then 404s at inference. Setting ``GEAP_RUN_SUFFIX=-v2`` gives every driver
+        a fresh name at once, instead of editing a constant in each of them.
+        """
+        return f"{base}{self.run_suffix}"
 
 
 def _first(env: dict[str, str], keys: tuple[str, ...]) -> str | None:
@@ -124,7 +146,23 @@ def load_config(env: dict[str, str] | None = None) -> TuningConfig:
     label_value = env.get(_LABEL_VALUE_ENV)
     labels = {label_key: label_value} if label_key and label_value else {}
 
-    return TuningConfig(project=project, location=location, bucket=bucket, labels=labels)
+    # Validated here rather than at launch: an illegal suffix would otherwise
+    # surface as a 400 from the API partway into a paid run.
+    run_suffix = env.get(_RUN_SUFFIX_ENV, "")
+    if run_suffix and not _RUN_SUFFIX_RE.fullmatch(run_suffix):
+        msg = (
+            f"{_RUN_SUFFIX_ENV}={run_suffix!r} is not resource-ID-safe; use lowercase "
+            f"letters, digits and hyphens only, max 32 chars (e.g. '-v2')"
+        )
+        raise ValueError(msg)
+
+    return TuningConfig(
+        project=project,
+        location=location,
+        bucket=bucket,
+        labels=labels,
+        run_suffix=run_suffix,
+    )
 
 
 def requires_global_endpoint(model: str | None) -> bool:

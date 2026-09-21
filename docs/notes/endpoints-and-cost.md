@@ -68,9 +68,11 @@ its tuning job.
 > `tuned_endpoint(job)` still returns the endpoint resource name — which no longer
 > exists. The example therefore skips launching and then **404s at inference**
 > rather than transparently re-tuning. There is no cheap fix: detecting it would
-> cost an endpoint-existence API call on every reuse. The remedy is to **change the
-> display name** (for a sweep, `sweep.name`) so a fresh job is launched. The
-> cleanup script prints this warning when it finishes.
+> cost an endpoint-existence API call on every reuse. The remedy is
+> **`GEAP_RUN_SUFFIX`**: set it in `.env` (e.g. `-v2`) and every driver resolves a
+> fresh display name through `cfg.display_name()` in one move, instead of editing a
+> constant in each of the 17 of them. The cleanup script prints this when it
+> finishes. See [environment](environment.md).
 
 **Why you will need it.** Every job runs with `export_last_checkpoint_only=False`
 (the default, so `collect_checkpoint_curve` can score each checkpoint) and GEAP

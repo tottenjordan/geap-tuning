@@ -145,5 +145,5 @@ echo
 echo "HEADS UP: the tuning JOBS remain (tuningJobs exposes no delete), and each one"
 echo "still reports the endpoint you just deleted. So reuse-by-display-name will"
 echo "find the job, skip launching, and then 404 at inference. To re-run any of"
-echo "these examples, change its display name (for a sweep, sweep.name) so a fresh"
-echo "job is launched. See docs/notes/endpoints-and-cost.md."
+echo "these examples, bump GEAP_RUN_SUFFIX in .env (e.g. -v2) so every driver gets a"
+echo "fresh name at once. See docs/notes/endpoints-and-cost.md."

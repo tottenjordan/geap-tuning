@@ -87,6 +87,7 @@ def _gate_ok(base: dict[str, object], *, force: bool) -> bool:
 def main() -> None:
     """Run the full generative-SFT workflow with a pilot gate and before → after."""
     cfg = load_config()
+    display_name = cfg.display_name(DISPLAY_NAME)
     client = genai_client(cfg)
     force = "--force" in sys.argv
     pilot_only = "--pilot-only" in sys.argv  # score the gate, then stop (no tuning spend)
@@ -114,14 +115,14 @@ def main() -> None:
 
     # 4. Reuse an existing job if one exists; otherwise launch.
     job = find_tuning_job_by_display_name(
-        client, DISPLAY_NAME, train_uri=train_uri, data_fingerprint=data_fp
+        client, display_name, train_uri=train_uri, data_fingerprint=data_fp
     )
     if job is None:
         job = launch_sft_job(
             client,
             train_uri=train_uri,
             val_uri=val_uri,
-            display_name=DISPLAY_NAME,
+            display_name=display_name,
             base_model=BASE_MODEL,
             epochs=EPOCHS,
             adapter_size=ADAPTER_SIZE,
